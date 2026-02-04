@@ -31,6 +31,8 @@ engine = create_engine(TEST_DATABASE_URL, pool_pre_ping=True)
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+# Fixture: Creates all DB tables once before the test session starts,
+# drops them after all tests finish. Runs automatically (autouse=True).
 @pytest.fixture(scope="session", autouse=True)
 def create_tables():
     """Create all tables once for the entire test session, drop after."""
@@ -39,6 +41,9 @@ def create_tables():
     Base.metadata.drop_all(bind=engine)
 
 
+# Fixture: Provides a fresh DB session per test. Uses savepoints so
+# app code can call commit() without actually persisting data.
+# Everything is rolled back after each test for complete isolation.
 @pytest.fixture(scope="function")
 def db_session():
     """
@@ -67,6 +72,8 @@ def db_session():
     connection.close()
 
 
+# Fixture: Creates a FastAPI TestClient that sends HTTP requests to the app.
+# Overrides the get_db dependency so the app uses the test DB session.
 @pytest.fixture(scope="function")
 def client(db_session):
     """FastAPI TestClient with DB dependency overridden to use test session."""
@@ -82,6 +89,8 @@ def client(db_session):
     app.dependency_overrides.clear()
 
 
+# Fixture: Factory function to insert a user directly into the test DB.
+# Returns (user_object, plaintext_password) so tests can use both.
 @pytest.fixture
 def create_test_user(db_session):
     """Factory fixture to create a user directly in the DB."""
@@ -103,6 +112,8 @@ def create_test_user(db_session):
     return _create
 
 
+# Fixture: Factory function to build HTTP Basic Auth headers
+# from a username and password (base64 encoded).
 @pytest.fixture
 def auth_headers():
     """Factory fixture to build Basic Auth headers."""
@@ -114,6 +125,8 @@ def auth_headers():
     return _auth
 
 
+# Fixture: Convenience shortcut - creates a test user AND returns
+# the matching auth headers in one step. Returns (user, headers_dict).
 @pytest.fixture
 def test_user_with_auth(create_test_user, auth_headers):
     """Convenience: creates a user and returns (user, auth_headers_dict)."""

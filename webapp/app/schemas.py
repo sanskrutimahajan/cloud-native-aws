@@ -2,9 +2,10 @@
 Response Schemas - Defines what data is returned to the client
 """
 
-from pydantic import BaseModel, EmailStr, ConfigDict, field_serializer
 from datetime import datetime, timezone
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, EmailStr, field_serializer
 
 
 # User response format - password is NEVER returned
