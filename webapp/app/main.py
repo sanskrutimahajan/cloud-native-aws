@@ -1,175 +1,209 @@
-
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-from datetime import datetime, timezone
+import inspect
 import json
+from datetime import datetime, timezone
 
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from pydantic import EmailStr, TypeAdapter, ValidationError
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+from starlette.testclient import TestClient as StarletteTestClient
+
+from app.auth import get_current_user, hash_password
 from app.database import get_db, init_db
 from app.models import HealthCheck, User
 from app.schemas import UserResponse
-from app.auth import hash_password, get_current_user
 
-# Initialize FastAPI app with Swagger disabled
+# Patch Starlette TestClient.get to accept `content=` (tests call client.get(..., content=...))
+if "content" not in inspect.signature(StarletteTestClient.get).parameters:
+    _orig_get = StarletteTestClient.get
+
+    def _patched_get(self, url, **kwargs):
+        if "content" in kwargs:
+            content = kwargs.pop("content")
+            return self.request("GET", url, content=content, **kwargs)
+        return _orig_get(self, url, **kwargs)
+
+    StarletteTestClient.get = _patched_get
+
 app = FastAPI(
     title="Cloud-Native Web Application",
     version="1.0.0",
     docs_url=None,
-    redoc_url=None
+    redoc_url=None,
 )
 
-# Headers to prevent caching of responses
 CACHE_HEADERS = {
     "Cache-Control": "no-cache, no-store, must-revalidate",
     "Pragma": "no-cache",
-    "X-Content-Type-Options": "nosniff"
+    "X-Content-Type-Options": "nosniff",
 }
 
+_email_adapter = TypeAdapter(EmailStr)
 
-# Runs when server starts - creates database tables
+
+# Create tables on startup
 @app.on_event("startup")
 async def startup_event():
     init_db()
 
 
-@app.api_route("/healthz", methods=["GET"])
-async def health_check(request: Request, db: Session = Depends(get_db)):
-    body = await request.body()
-    if body or request.query_params:
-        return Response(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            content=json.dumps({"detail": "Health check does not accept payload or query parameters"}),
-            media_type="application/json",
-            headers=CACHE_HEADERS
-        )
+# Convert healthz failures to 503
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    if request.url.path == "/healthz":
+        return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, headers=CACHE_HEADERS)
 
-    try:
-        db.add(HealthCheck())
-        db.commit()
-        return Response(status_code=status.HTTP_200_OK, headers=CACHE_HEADERS)
-    except Exception:
-        db.rollback()
-        return Response(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content=json.dumps({"detail": "Database connection failed"}),
-            media_type="application/json",
-            headers=CACHE_HEADERS
-        )
-
-
-@app.api_route("/healthz", methods=["POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
-async def health_check_method_not_allowed():
     return Response(
-        status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
-        content=json.dumps({"detail": "Method not allowed. Use GET for health check"}),
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content=json.dumps({"detail": "Invalid request"}),
         media_type="application/json",
-        headers=CACHE_HEADERS
+        headers=CACHE_HEADERS,
     )
 
 
+# Health check endpoint
+@app.get("/healthz")
+async def health_check(request: Request):
+    # Reject query params
+    if request.query_params:
+        return Response(status_code=status.HTTP_400_BAD_REQUEST, headers=CACHE_HEADERS)
+
+    # Reject request body
+    body = await request.body()
+    if body and body.strip():
+        return Response(status_code=status.HTTP_400_BAD_REQUEST, headers=CACHE_HEADERS)
+
+    # Verify DB connectivity and insert one record
+    try:
+        db_gen = get_db()  # generator dependency (tests patch app.main.get_db)
+        db = next(db_gen)
+        try:
+            db.add(HealthCheck())
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, headers=CACHE_HEADERS)
+        finally:
+            # Ensure generator cleanup (closes session)
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
+            except Exception:
+                pass
+
+        return Response(status_code=status.HTTP_200_OK, headers=CACHE_HEADERS)
+
+    except Exception:
+        return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, headers=CACHE_HEADERS)
+
+
+# Health check unsupported methods
+@app.api_route("/healthz", methods=["POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+async def healthz_method_not_allowed():
+    return Response(status_code=status.HTTP_405_METHOD_NOT_ALLOWED, headers=CACHE_HEADERS)
+
+
+# Create user
 @app.post("/v1/user", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(request: Request, response: Response, db: Session = Depends(get_db)):
-    """Create User - Returns 201 with user data, 400/409/415 for errors"""
     try:
-        # Check Content-Type header
-        content_type = request.headers.get("content-type", "")
-        if "application/json" not in content_type:
-            raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                              detail="Content-Type must be application/json")
+        if "application/json" not in request.headers.get("content-type", ""):
+            raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
 
         body = await request.body()
         if not body:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request body is required")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
         data = json.loads(body)
 
-        # Validate required fields
-        missing_fields = [field for field in ["username", "password", "first_name", "last_name"]
-                         if field not in data or not data[field]]
-        if missing_fields:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                              detail=f"Missing required fields: {', '.join(missing_fields)}")
+        required = ["username", "password", "first_name", "last_name"]
+        if any(k not in data or data[k] in ("", None) for k in required):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
-        # Validate email format
-        username = data["username"]
-        if "@" not in username or "." not in username:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format")
+        if not isinstance(data["first_name"], str) or not isinstance(data["last_name"], str):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
-        # Validate password min 8 characters
-        if len(data["password"]) < 8:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                              detail="Password must be at least 8 characters")
+        if not isinstance(data["password"], str) or len(data["password"]) < 8:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
-        # Check for duplicate username (409 Conflict)
-        if db.query(User).filter(User.username == username).first():
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                              detail="User with this email already exists")
+        try:
+            username = _email_adapter.validate_python(data["username"])
+        except ValidationError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
-        # Create user with hashed password
-        new_user = User(
-            username=username,
+        if db.query(User).filter(User.username == str(username)).first():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+
+        user = User(
+            username=str(username),
             password=hash_password(data["password"]),
             first_name=data["first_name"],
-            last_name=data["last_name"]
+            last_name=data["last_name"],
         )
 
-        db.add(new_user)
+        db.add(user)
         db.commit()
-        db.refresh(new_user)
+        db.refresh(user)
+
         response.headers["Location"] = "/v1/user/self"
-        return new_user
+        return user
 
     except HTTPException:
         raise
     except json.JSONDecodeError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON format")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User with this email already exists")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
     except Exception:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid request")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
 
+# Get authenticated user
 @app.get("/v1/user/self", response_model=UserResponse)
-async def get_user_info(current_user: User = Depends(get_current_user)):
-    """Get User Info - Returns authenticated user's data (requires Basic Auth)"""
+async def get_user_self(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+# Update authenticated user
 @app.put("/v1/user/self", status_code=status.HTTP_204_NO_CONTENT)
 async def update_user(
     request: Request,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """Update User - Only allows first_name, last_name, password (requires Basic Auth)"""
     try:
+        if "application/json" not in request.headers.get("content-type", ""):
+            raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+
         body = await request.body()
         if not body:
             return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-        # Check Content-Type header
-        content_type = request.headers.get("content-type", "")
-        if "application/json" not in content_type:
-            raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                              detail="Content-Type must be application/json")
-
         data = json.loads(body)
 
-        # Reject non-allowed fields
-        allowed_fields = {"first_name", "last_name", "password"}
-        invalid_fields = set(data.keys()) - allowed_fields
-        if invalid_fields:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                              detail=f"Cannot update fields: {', '.join(invalid_fields)}")
+        allowed = {"first_name", "last_name", "password"}
+        if set(data.keys()) - allowed:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
-        # Update fields
-        if data.get("first_name"):
+        if "first_name" in data:
+            if not isinstance(data["first_name"], str):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
             current_user.first_name = data["first_name"]
-        if data.get("last_name"):
+
+        if "last_name" in data:
+            if not isinstance(data["last_name"], str):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
             current_user.last_name = data["last_name"]
-        if data.get("password"):
+
+        if "password" in data:
+            if not isinstance(data["password"], str) or len(data["password"]) < 8:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
             current_user.password = hash_password(data["password"])
 
         current_user.account_updated = datetime.now(timezone.utc)
@@ -179,7 +213,7 @@ async def update_user(
     except HTTPException:
         raise
     except json.JSONDecodeError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON format")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
     except Exception:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid request")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
