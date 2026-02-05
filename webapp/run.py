@@ -1,9 +1,6 @@
-"""
-Application Entry Point
-Run this file to start the server
-"""
 
 import uvicorn
+
 from app.config import settings
 
 if __name__ == "__main__":
