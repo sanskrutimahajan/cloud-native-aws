@@ -6,6 +6,7 @@ import pytest
 
 from app.models import HealthCheck
 
+
 class TestHealthzPositive:
 
     # Service is healthy and database connection successful
@@ -122,7 +123,7 @@ class TestHealthzEdgeCases:
         assert record is not None
         assert record.check_datetime is not None
 
-    # Edge Case: Very large request body should be rejected
+    #  Very large request body should be rejected
     def test_healthz_rejects_large_request_body(self, client):
         large_body = b"x" * 10000
         response = client.request("GET", "/healthz", content=large_body)
