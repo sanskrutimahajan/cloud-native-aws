@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.testclient import TestClient as StarletteTestClient
 
@@ -68,14 +69,14 @@ async def health_check(request: Request):
     if request.query_params:
         return Response(status_code=status.HTTP_400_BAD_REQUEST, headers=CACHE_HEADERS)
 
-    # Reject request body
+    # Reject request body (ANY body content)
     body = await request.body()
-    if body and body.strip():
+    if body:
         return Response(status_code=status.HTTP_400_BAD_REQUEST, headers=CACHE_HEADERS)
 
     # Verify DB connectivity and insert one record
     try:
-        db_gen = get_db()  # generator dependency (tests patch app.main.get_db)
+        db_gen = get_db()
         db = next(db_gen)
         try:
             db.add(HealthCheck())
@@ -87,7 +88,6 @@ async def health_check(request: Request):
                 pass
             return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, headers=CACHE_HEADERS)
         finally:
-            # Ensure generator cleanup (closes session)
             try:
                 next(db_gen)
             except StopIteration:
@@ -135,8 +135,8 @@ async def create_user(request: Request, response: Response, db: Session = Depend
         except ValidationError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
-        if db.query(User).filter(User.username == str(username)).first():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+        if db.query(User).filter(func.lower(User.username) == str(username).lower()).first():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT)
 
         user = User(
             username=str(username),
@@ -158,7 +158,7 @@ async def create_user(request: Request, response: Response, db: Session = Depend
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT)
     except Exception:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
@@ -194,15 +194,24 @@ async def update_user(
         if "first_name" in data:
             if not isinstance(data["first_name"], str):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+            # Reject empty strings and whitespace-only
+            if not data["first_name"].strip():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
             current_user.first_name = data["first_name"]
 
         if "last_name" in data:
             if not isinstance(data["last_name"], str):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+            # Reject empty strings and whitespace-only
+            if not data["last_name"].strip():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
             current_user.last_name = data["last_name"]
 
         if "password" in data:
             if not isinstance(data["password"], str) or len(data["password"]) < 8:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+            # Reject empty strings and whitespace-only
+            if not data["password"].strip():
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
             current_user.password = hash_password(data["password"])
 
