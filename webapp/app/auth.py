@@ -1,18 +1,17 @@
-"""
-Authentication - Password hashing and Basic Auth verification
-"""
+"""Authentication - Password hashing and Basic Auth verification"""
 
 import bcrypt
-from fastapi import HTTPException, status, Depends
+from fastapi import Depends, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
+from app.exceptions import APIException
 
 security = HTTPBasic()
 
 
-# Hash password using BCrypt with auto-generated salt
+# Hash password using BCrypt
 def hash_password(password: str) -> str:
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
@@ -27,13 +26,16 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-# Verify Basic Auth credentials and return user if valid
+# Verify Basic Auth credentials and return user
 def get_current_user(credentials: HTTPBasicCredentials = Depends(security), db: Session = Depends(get_db)) -> User:
     user = db.query(User).filter(User.username == credentials.username).first()
 
     if not user or not verify_password(credentials.password, user.password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                          detail="Invalid email or password",
-                          headers={"WWW-Authenticate": "Basic"})
+        raise APIException(
+            error_type="Unauthorized",
+            message="Authentication credentials are missing or invalid",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            headers={"WWW-Authenticate": "Basic realm=\"Access to user account\""}
+        )
 
     return user
