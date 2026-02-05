@@ -94,7 +94,7 @@ Tests use the same database configured via environment variables. Each test runs
 Run the full test suite:
 
 ```bash
-pytest -v
+python -m pytest -v
 ```
 
 Run tests with coverage report:
