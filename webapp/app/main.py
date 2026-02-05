@@ -2,7 +2,7 @@ import inspect
 import json
 from datetime import datetime, timezone
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import Depends, FastAPI, Request, Response, status
 from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
