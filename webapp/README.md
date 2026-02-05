@@ -1,16 +1,13 @@
 # webapp
-
 Cloud-native web application for CSYE 6225. Built with FastAPI and PostgreSQL, it provides RESTful APIs for health monitoring and user management with authentication, input validation, and secure password storage.
 
 ## Prerequisites
-
 - Python 3.10 or higher
 - PostgreSQL 16
 - pip (Python package manager)
 - Git
 
 ## Frameworks and Libraries
-
 | Dependency | Purpose |
 |---|---|
 | FastAPI 0.104.1 | Web framework |
@@ -29,39 +26,31 @@ All dependencies are listed in `requirements.txt`.
 ## Build and Deploy Instructions
 
 ### 1. Clone the repository
-
 ```bash
-git clone git@github.com:Msanskruti/webapp_fork.git
+git clone git@github.com:YOUR_USERNAME/webapp_fork.git
 cd webapp_fork
 ```
 
 ### 2. Create and activate a virtual environment
-
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
 ### 3. Install dependencies
-
 ```bash
 pip install -r requirements.txt
 ```
 
 ### 4. Set up the database
-
 Create a PostgreSQL database for the application:
-
 ```bash
 createdb webapp_db
 ```
 
 ### 5. Configure environment variables
-
 Create a `.env` file in the project root. Do not commit this file to version control.
-
 Required environment variables:
-
 - `DATABASE_HOST` - Database host 
 - `DATABASE_PORT` - Database port 
 - `DATABASE_NAME` - Database name
@@ -71,7 +60,6 @@ Required environment variables:
 - `APP_PORT` - Application port (default: `8080`)
 
 ### 6. Run the application
-
 ```bash
 python run.py
 ```
@@ -79,7 +67,6 @@ python run.py
 The application will start on the host and port specified in your `.env` file (default: `http://localhost:8080`).
 
 ## API Endpoints
-
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | GET | `/healthz` | None | Health check with database connectivity verification |
@@ -87,24 +74,32 @@ The application will start on the host and port specified in your `.env` file (d
 | GET | `/v1/user/self` | Basic Auth | Retrieve authenticated user information |
 | PUT | `/v1/user/self` | Basic Auth | Update authenticated user (first_name, last_name, password) |
 
+## Security
+- Passwords are hashed using BCrypt with auto-generated salts
+- Email addresses are case-insensitive for uniqueness
+- Never commit `.env` file or credentials to repository
+- Use environment variables for all sensitive configuration
+  
 ## Testing
+The application includes 134 comprehensive integration tests covering:
+- Positive test cases (creation, retrieval, update, authentication)
+- Negative test cases (invalid inputs, auth errors, wrong methods)
+- Edge cases (boundary values, concurrency, performance, security)
 
 Tests use the same database configured via environment variables. Each test runs inside a transaction that is rolled back after completion, so no test data persists.
 
 Run the full test suite:
-
 ```bash
 python -m pytest -v
 ```
+Expected output: 134 passed, 4 warnings
 
 Run tests with coverage report:
-
 ```bash
 pytest --cov=app --cov-report=term-missing
 ```
 
 Run a specific test file:
-
 ```bash
 pytest tests/test_healthz.py -v
 pytest tests/test_user.py -v
