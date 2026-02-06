@@ -1,5 +1,6 @@
 import inspect
 import json
+import logging
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, Request, Response, status
@@ -20,6 +21,12 @@ from app.exceptions import (
     unsupported_media_type_response,
     create_error_response
 )
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Patch Starlette TestClient.get to accept `content=` (tests call client.get(..., content=...))
 if "content" not in inspect.signature(StarletteTestClient.get).parameters:
@@ -72,12 +79,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     if request.url.path == "/healthz":
         return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, headers=CACHE_HEADERS)
 
-    return create_error_response(
-        request=request,
-        error_type="Bad Request",
-        message="Invalid request",
-        status_code=status.HTTP_400_BAD_REQUEST
-    )
+    logger.error(f"Unhandled exception on {request.method} {request.url.path}: {exc}", exc_info=True)
+    return validation_error_response(request, "Invalid request")
 
 
 # Health check endpoint
@@ -152,10 +155,14 @@ async def create_user(request: Request, response: Response, db: Session = Depend
     # Validate data types
     if not isinstance(data["first_name"], str) or not isinstance(data["last_name"], str):
         return validation_error_response(request, "First name and last name must be strings")
+    if not data["first_name"].strip() or not data["last_name"].strip():
+        return validation_error_response(request, "First name and last name cannot be empty or whitespace")
 
     # Validate password
     if not isinstance(data["password"], str):
         return validation_error_response(request, "Password must be a string")
+    if not data["password"].strip():
+        return validation_error_response(request, "Password cannot be empty or whitespace")
     if len(data["password"]) < 8:
         return validation_error_response(request, "Password must be at least 8 characters")
 
@@ -188,8 +195,9 @@ async def create_user(request: Request, response: Response, db: Session = Depend
     except IntegrityError:
         db.rollback()
         return conflict_error_response(request)
-    except Exception:
+    except Exception as e:
         db.rollback()
+        logger.error(f"Database error creating user: {e}", exc_info=True)
         return validation_error_response(request, "Failed to create user")
 
 
@@ -250,10 +258,10 @@ async def update_user(
     if "password" in data:
         if not isinstance(data["password"], str):
             return validation_error_response(request, "Password must be a string")
-        if len(data["password"]) < 8:
-            return validation_error_response(request, "Password must be at least 8 characters")
         if not data["password"].strip():
             return validation_error_response(request, "Password cannot be empty or whitespace")
+        if len(data["password"]) < 8:
+            return validation_error_response(request, "Password must be at least 8 characters")
         current_user.password = hash_password(data["password"])
 
     # Save changes
@@ -261,6 +269,7 @@ async def update_user(
         current_user.account_updated = datetime.now(timezone.utc)
         db.commit()
         return Response(status_code=status.HTTP_204_NO_CONTENT)
-    except Exception:
+    except Exception as e:
         db.rollback()
+        logger.error(f"Database error updating user: {e}", exc_info=True)
         return validation_error_response(request, "Failed to update user")

@@ -2,10 +2,14 @@
 Database Connection - Connects to PostgreSQL using environment variables
 """
 
+import logging
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 # pool_pre_ping: reconnects if DB restarts, connect_timeout: 3 sec max wait
 engine = create_engine(
@@ -34,5 +38,6 @@ def init_db():
     try:
         from app.models import HealthCheck, User
         Base.metadata.create_all(bind=engine)
-    except Exception:
-        pass
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}", exc_info=True)
