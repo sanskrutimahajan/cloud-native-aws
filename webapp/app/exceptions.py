@@ -1,6 +1,7 @@
 """Standardized error responses per Swagger spec"""
 
 from datetime import datetime, timezone
+
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 
@@ -27,7 +28,6 @@ def create_error_response(request: Request, error_type: str, message: str, statu
         },
         headers=headers or {}
     )
-
 
 # 400 Bad Request
 def validation_error_response(request: Request, message: str = "Validation error"):

@@ -3,6 +3,7 @@
 import bcrypt
 from fastapi import Depends, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
@@ -28,7 +29,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 # Verify Basic Auth credentials and return user
 def get_current_user(credentials: HTTPBasicCredentials = Depends(security), db: Session = Depends(get_db)) -> User:
-    user = db.query(User).filter(User.username == credentials.username).first()
+    user = db.query(User).filter(func.lower(User.username) == credentials.username.lower()).first()
 
     if not user or not verify_password(credentials.password, user.password):
         raise APIException(
