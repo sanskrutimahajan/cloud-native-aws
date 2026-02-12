@@ -9,6 +9,12 @@ variable "gcp_region" {
   default     = "us-central1"
 }
 
+variable "environment" {
+  description = "Environment name (dev or demo)"
+  type        = string
+  default     = "dev"
+}
+
 variable "vpc_name" {
   description = "Name of the VPC network"
   type        = string
@@ -37,4 +43,10 @@ variable "allowed_ports" {
   description = "List of ports to allow in firewall rules"
   type        = list(string)
   default     = ["22", "80", "443"]
+}
+
+variable "network_tags" {
+  description = "Network tags for firewall rules to target"
+  type        = list(string)
+  default     = ["web-server"]
 }
