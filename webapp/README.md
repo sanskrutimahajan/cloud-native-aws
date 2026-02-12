@@ -23,7 +23,33 @@ Cloud-native web application for CSYE 6225. Built with FastAPI and PostgreSQL, i
 
 All dependencies are listed in `requirements.txt`.
 
-## Build and Deploy Instructions
+## Automated Setup (Ubuntu 24.04 LTS)
+
+The `scripts/setup.sh` script automates the complete setup on a fresh Ubuntu 24.04 LTS server. It performs the following steps:
+
+1. Updates and upgrades system packages
+2. Installs and enables PostgreSQL
+3. Creates the application database and database user
+4. Installs Python 3, pip, and venv
+5. Creates a dedicated Linux group and user (`csye6225`)
+6. Deploys application files to `/opt/csye6225/`
+7. Sets up a Python virtual environment and installs dependencies
+8. Sets file ownership and permissions
+9. Verifies the installation
+
+### Usage
+```bash
+git clone git@github.com:YOUR_USERNAME/webapp_fork.git
+cd webapp_fork
+sudo bash scripts/setup.sh
+```
+
+After setup completes, update the database password in `/opt/csye6225/.env`, then start the application:
+```bash
+sudo -u csye6225 /opt/csye6225/venv/bin/python /opt/csye6225/run.py
+```
+
+## Manual Setup (Development)
 
 ### 1. Clone the repository
 ```bash
@@ -51,8 +77,8 @@ createdb webapp_db
 ### 5. Configure environment variables
 Create a `.env` file in the project root. Do not commit this file to version control.
 Required environment variables:
-- `DATABASE_HOST` - Database host 
-- `DATABASE_PORT` - Database port 
+- `DATABASE_HOST` - Database host
+- `DATABASE_PORT` - Database port
 - `DATABASE_NAME` - Database name
 - `DATABASE_USER` - Database user
 - `DATABASE_PASSWORD` - Database password
