@@ -1,0 +1,10 @@
+gcp_project  = "your-gcp-project-id"
+gcp_region   = "us-central1"
+environment  = "dev"
+vpc_name     = "csye6225-vpc"
+network_tags = ["web-server"]
+
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
+zones                = ["us-central1-a", "us-central1-b", "us-central1-c"]
+allowed_ports        = ["22", "80", "443"]

@@ -5,7 +5,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = var.vpc_name
+    Name = "${var.environment}-${var.vpc_name}"
   }
 }
 
@@ -14,7 +14,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "${var.vpc_name}-igw"
+    Name = "${var.environment}-${var.vpc_name}-igw"
   }
 }
 
@@ -27,7 +27,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.vpc_name}-public-subnet-${count.index + 1}"
+    Name = "${var.environment}-${var.vpc_name}-public-subnet-${count.index + 1}"
   }
 }
 
@@ -39,7 +39,7 @@ resource "aws_subnet" "private" {
   availability_zone = var.availability_zones[count.index]
 
   tags = {
-    Name = "${var.vpc_name}-private-subnet-${count.index + 1}"
+    Name = "${var.environment}-${var.vpc_name}-private-subnet-${count.index + 1}"
   }
 }
 
@@ -53,7 +53,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "${var.vpc_name}-public-rt"
+    Name = "${var.environment}-${var.vpc_name}-public-rt"
   }
 }
 
@@ -62,7 +62,7 @@ resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "${var.vpc_name}-private-rt"
+    Name = "${var.environment}-${var.vpc_name}-private-rt"
   }
 }
 
@@ -78,4 +78,82 @@ resource "aws_route_table_association" "private" {
   count          = 3
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id
+}
+
+# Application Security Group
+resource "aws_security_group" "application" {
+  name        = "${var.environment}-${var.vpc_name}-application-sg"
+  description = "Security group for application servers"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.my_ip_cidr]
+  }
+
+  ingress {
+    description = "Application port"
+    from_port   = var.application_port
+    to_port     = var.application_port
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Allow all outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.environment}-${var.vpc_name}-application-sg"
+  }
+}
+
+# Database Security Group
+resource "aws_security_group" "database" {
+  name        = "${var.environment}-${var.vpc_name}-database-sg"
+  description = "Security group for database servers"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "Database access from application"
+    from_port       = var.database_port
+    to_port         = var.database_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.application.id]
+  }
+
+  egress {
+    description = "Allow outbound within VPC"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  tags = {
+    Name = "${var.environment}-${var.vpc_name}-database-sg"
+  }
 }

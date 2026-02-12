@@ -10,6 +10,12 @@ variable "aws_profile" {
   default     = "dev"
 }
 
+variable "environment" {
+  description = "Environment name (dev or demo)"
+  type        = string
+  default     = "dev"
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
@@ -38,4 +44,21 @@ variable "availability_zones" {
   description = "Availability zones"
   type        = list(string)
   default     = ["us-east-1a", "us-east-1b", "us-east-1c"]
+}
+
+variable "my_ip_cidr" {
+  description = "Your IP address in CIDR notation for SSH access"
+  type        = string
+}
+
+variable "application_port" {
+  description = "Port the application runs on"
+  type        = number
+  default     = 8080
+}
+
+variable "database_port" {
+  description = "Database port"
+  type        = number
+  default     = 5432
 }
