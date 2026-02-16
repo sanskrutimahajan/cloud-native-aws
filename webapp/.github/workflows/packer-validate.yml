@@ -21,6 +21,9 @@ jobs:
         working-directory: packer
         run: packer init .
 
+      - name: Create dummy artifact for validation
+        run: touch packer/webapp.zip
+
       - name: Check Packer formatting
         working-directory: packer
         run: |
@@ -32,4 +35,4 @@ jobs:
 
       - name: Validate Packer template
         working-directory: packer
-        run: packer validate .
+        run: packer validate -var "app_zip_path=webapp.zip" .
