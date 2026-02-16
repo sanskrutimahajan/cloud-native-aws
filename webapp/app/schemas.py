@@ -1,14 +1,12 @@
-"""
-Response Schemas - Defines what data is returned to the client
-"""
+"""Response schemas."""
 
 from datetime import datetime, timezone
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, field_serializer
 
 
-# User response format - password is NEVER returned
 class UserResponse(BaseModel):
     id: UUID
     username: EmailStr
@@ -17,9 +15,8 @@ class UserResponse(BaseModel):
     account_created: datetime
     account_updated: datetime
 
-    model_config = ConfigDict(from_attributes=True)  # Allows conversion from SQLAlchemy model
+    model_config = ConfigDict(from_attributes=True)
 
-    # Force timestamps to display as UTC (+00:00)
     @field_serializer('account_created', 'account_updated')
     def serialize_datetime(self, dt: datetime) -> str:
         if dt.tzinfo is None:
@@ -27,3 +24,17 @@ class UserResponse(BaseModel):
         else:
             dt = dt.astimezone(timezone.utc)
         return dt.isoformat()
+
+
+class NetworkInterface(BaseModel):
+    private_ip: str
+    public_ip: Optional[str] = None
+    network: str
+
+
+class MetadataResponse(BaseModel):
+    cloud_platform: str
+    instance_id: str
+    region: str
+    machine_type: str
+    network_interfaces: List[NetworkInterface]
