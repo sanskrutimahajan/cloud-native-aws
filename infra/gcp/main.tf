@@ -60,3 +60,33 @@ resource "google_compute_firewall" "deny_all" {
   source_ranges = ["0.0.0.0/0"]
   direction     = "INGRESS"
 }
+
+# Compute Engine Instance
+resource "google_compute_instance" "application" {
+  name         = "${var.environment}-${var.vpc_name}-application"
+  machine_type = var.machine_type
+  zone         = var.zones[0]
+
+  boot_disk {
+    initialize_params {
+      image = var.gcp_image_name
+      size  = 25
+      type  = "pd-balanced"
+    }
+  }
+
+  network_interface {
+    network    = google_compute_network.main.id
+    subnetwork = google_compute_subnetwork.public[0].id
+
+    access_config {
+      # Ephemeral public IP
+    }
+  }
+
+  tags = var.network_tags
+
+  metadata = {
+    environment = var.environment
+  }
+}
