@@ -42,11 +42,22 @@ variable "zones" {
 variable "allowed_ports" {
   description = "List of ports to allow in firewall rules"
   type        = list(string)
-  default     = ["22", "80", "443"]
+  default     = ["22", "80", "443", "8080"]
 }
 
 variable "network_tags" {
   description = "Network tags for firewall rules to target"
   type        = list(string)
   default     = ["web-server"]
+}
+
+variable "gcp_image_name" {
+  description = "Custom GCP image name for the Compute Engine instance"
+  type        = string
+}
+
+variable "machine_type" {
+  description = "GCP machine type for the instance"
+  type        = string
+  default     = "e2-medium"
 }
