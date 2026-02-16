@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, Request, Response, status
+from fastapi.responses import JSONResponse
 from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
@@ -12,8 +13,9 @@ from starlette.testclient import TestClient as StarletteTestClient
 
 from app.auth import get_current_user, hash_password
 from app.database import get_db, init_db
+from app.metadata import detect_platform, get_metadata
 from app.models import HealthCheck, User
-from app.schemas import UserResponse
+from app.schemas import MetadataResponse, UserResponse
 from app.exceptions import (
     APIException,
     validation_error_response,
@@ -56,10 +58,10 @@ CACHE_HEADERS = {
 _email_adapter = TypeAdapter(EmailStr)
 
 
-# Create tables on startup
 @app.on_event("startup")
 async def startup_event():
     init_db()
+    detect_platform()
 
 
 # Handle APIException (no "detail" wrapper)
@@ -122,9 +124,55 @@ async def health_check(request: Request):
         return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, headers=CACHE_HEADERS)
 
 
-# Health check unsupported methods
 @app.api_route("/healthz", methods=["POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
 async def healthz_method_not_allowed():
+    return Response(status_code=status.HTTP_405_METHOD_NOT_ALLOWED, headers=CACHE_HEADERS)
+
+
+# Metadata endpoint
+@app.get("/v1/metadata", response_model=MetadataResponse)
+async def get_instance_metadata(request: Request):
+    if request.query_params:
+        return create_error_response(
+            request, "Bad Request",
+            "Query parameters are not allowed",
+            status.HTTP_400_BAD_REQUEST,
+            headers=CACHE_HEADERS,
+        )
+
+    body = await request.body()
+    if body:
+        return create_error_response(
+            request, "Bad Request",
+            "Request body is not allowed",
+            status.HTTP_400_BAD_REQUEST,
+            headers=CACHE_HEADERS,
+        )
+
+    try:
+        metadata = get_metadata()
+    except Exception:
+        logger.error("Failed to retrieve instance metadata", exc_info=True)
+        return create_error_response(
+            request, "Service Unavailable",
+            "Unable to retrieve instance metadata. The application may not be running on a supported cloud platform.",
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            headers=CACHE_HEADERS,
+        )
+
+    if metadata is None:
+        return create_error_response(
+            request, "Service Unavailable",
+            "Unable to retrieve instance metadata. The application may not be running on a supported cloud platform.",
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            headers=CACHE_HEADERS,
+        )
+
+    return JSONResponse(content=metadata, headers=CACHE_HEADERS)
+
+
+@app.api_route("/v1/metadata", methods=["POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+async def metadata_method_not_allowed():
     return Response(status_code=status.HTTP_405_METHOD_NOT_ALLOWED, headers=CACHE_HEADERS)
 
 

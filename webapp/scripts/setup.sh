@@ -81,7 +81,22 @@ log "Extracting application files..."
 unzip -o /home/ubuntu/webapp.zip -d /opt/csye6225
 
 # ============================================
-# 8. Set File Permissions
+# 8. Install Python Dependencies
+# ============================================
+log "Installing Python pip and venv..."
+apt-get install -y python3-pip python3-venv
+
+log "Creating Python virtual environment..."
+rm -rf /opt/csye6225/venv
+python3 -m venv /opt/csye6225/venv
+
+log "Installing Python dependencies..."
+/opt/csye6225/venv/bin/pip install -r /opt/csye6225/requirements.txt
+
+log "Python dependencies installed successfully"
+
+# ============================================
+# 9. Set File Permissions
 # ============================================
 log "Setting file permissions..."
 
@@ -97,24 +112,10 @@ find /opt/csye6225 -type f -exec chmod 644 {} \;
 # Make run.py executable
 chmod 755 /opt/csye6225/run.py
 
+# Restore execute permissions on venv binaries
+find /opt/csye6225/venv/bin -type f -exec chmod 755 {} \;
+
 log "File permissions set successfully"
-
-# ============================================
-# 9. Install Python Dependencies
-# ============================================
-log "Installing Python pip and venv..."
-apt-get install -y python3-pip python3-venv
-
-log "Creating Python virtual environment..."
-python3 -m venv /opt/csye6225/venv
-
-log "Installing Python dependencies..."
-/opt/csye6225/venv/bin/pip install -r /opt/csye6225/requirements.txt
-
-# Set ownership of venv to application user
-chown -R csye6225:csye6225 /opt/csye6225/venv
-
-log "Python dependencies installed successfully"
 
 # ============================================
 # 10. Create Environment File
@@ -151,8 +152,8 @@ EnvironmentFile=/opt/csye6225/.env
 ExecStart=/opt/csye6225/venv/bin/python3 /opt/csye6225/run.py
 Restart=always
 RestartSec=3
-StandardOutput=syslog
-StandardError=syslog
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=csye6225
 
 [Install]
