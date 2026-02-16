@@ -100,7 +100,40 @@ chmod 755 /opt/csye6225/run.py
 log "File permissions set successfully"
 
 # ============================================
-# 9. Create SystemD Service File
+# 9. Install Python Dependencies
+# ============================================
+log "Installing Python pip and venv..."
+apt-get install -y python3-pip python3-venv
+
+log "Creating Python virtual environment..."
+python3 -m venv /opt/csye6225/venv
+
+log "Installing Python dependencies..."
+/opt/csye6225/venv/bin/pip install -r /opt/csye6225/requirements.txt
+
+# Set ownership of venv to application user
+chown -R csye6225:csye6225 /opt/csye6225/venv
+
+log "Python dependencies installed successfully"
+
+# ============================================
+# 10. Create Environment File
+# ============================================
+log "Creating environment file..."
+cat > /opt/csye6225/.env << EOF
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_NAME=webapp_db
+DATABASE_USER=webapp_user
+DATABASE_PASSWORD=webapp_pass123
+EOF
+
+chown csye6225:csye6225 /opt/csye6225/.env
+chmod 600 /opt/csye6225/.env
+log "Environment file created with restricted permissions"
+
+# ============================================
+# 11. Create SystemD Service File
 # ============================================
 log "Creating SystemD service file..."
 
@@ -114,7 +147,8 @@ Type=simple
 User=csye6225
 Group=csye6225
 WorkingDirectory=/opt/csye6225
-ExecStart=/opt/csye6225/run.py
+EnvironmentFile=/opt/csye6225/.env
+ExecStart=/opt/csye6225/venv/bin/python3 /opt/csye6225/run.py
 Restart=always
 RestartSec=3
 StandardOutput=syslog
@@ -128,25 +162,25 @@ EOF
 log "SystemD service file created at /etc/systemd/system/csye6225.service"
 
 # ============================================
-# 10. Reload SystemD Daemon
+# 12. Reload SystemD Daemon
 # ============================================
 log "Reloading SystemD daemon to recognize new service..."
 systemctl daemon-reload
 
 # ============================================
-# 11. Enable Service (Start on Boot)
+# 13. Enable Service (Start on Boot)
 # ============================================
 log "Enabling csye6225 service to start on boot..."
 systemctl enable csye6225.service
 
 # ============================================
-# 12. Start the Service
+# 14. Start the Service
 # ============================================
 log "Starting csye6225 service..."
 systemctl start csye6225.service
 
 # ============================================
-# 13. Verify Service Status
+# 15. Verify Service Status
 # ============================================
 log "Verifying service status..."
 sleep 2
