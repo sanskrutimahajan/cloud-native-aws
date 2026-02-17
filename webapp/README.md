@@ -96,9 +96,25 @@ The application will start on the host and port specified in your `.env` file (d
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | GET | `/healthz` | None | Health check with database connectivity verification |
+| GET | `/v1/metadata` | None | Instance metadata (auto-detects AWS/GCP) |
 | POST | `/v1/user` | None | Create a new user account |
 | GET | `/v1/user/self` | Basic Auth | Retrieve authenticated user information |
 | PUT | `/v1/user/self` | Basic Auth | Update authenticated user (first_name, last_name, password) |
+
+## Packer - Custom Machine Images
+
+Custom AMIs (AWS) and GCP Images are built using HashiCorp Packer. Templates are in the `packer/` directory.
+
+- **Source image:** Ubuntu 24.04 LTS
+- **Builders:** `amazon-ebs` (AWS) and `googlecompute` (GCP) in a single template
+- **Provisioning:** `scripts/setup.sh` installs all dependencies, deploys the app, and configures systemd
+- **Image sharing:** AWS AMI shared with demo account, GCP image shared with demo project via IAM
+
+### CI/CD Workflows
+| Trigger | Workflow | Action |
+|---|---|---|
+| Pull request to `main` | `packer-validate.yml` | Validates Packer template formatting and syntax |
+| Push to `main` | `packer-build.yml` | Runs integration tests, then builds and shares images |
 
 ## Security
 - Passwords are hashed using BCrypt with auto-generated salts
@@ -118,7 +134,6 @@ Run the full test suite:
 ```bash
 python -m pytest -v
 ```
-Expected output: 134 passed, 4 warnings
 
 Run tests with coverage report:
 ```bash
