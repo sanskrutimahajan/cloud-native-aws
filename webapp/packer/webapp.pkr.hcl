@@ -11,11 +11,16 @@ packer {
   }
 }
 
+locals {
+  timestamp  = formatdate("YYYY-MM-DD-hhmm", timestamp())
+  image_name = "csye6225-webapp-${local.timestamp}"
+}
+
 # AWS AMI Builder
 source "amazon-ebs" "webapp" {
   region          = var.aws_region
   instance_type   = var.aws_instance_type
-  ami_name        = "csye6225-webapp-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  ami_name        = local.image_name
   ami_description = "Custom AMI for CSYE 6225 web application"
   ami_users       = var.ami_users
 
@@ -50,7 +55,7 @@ source "googlecompute" "webapp" {
   machine_type            = var.gcp_machine_type
   source_image_family     = "ubuntu-2404-lts-amd64"
   source_image_project_id = ["ubuntu-os-cloud"]
-  image_name              = "csye6225-webapp-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  image_name              = local.image_name
   image_description       = "Custom image for CSYE 6225 web application"
   image_family            = "csye6225-webapp"
   ssh_username            = var.ssh_username
@@ -89,7 +94,7 @@ build {
     only = ["googlecompute.webapp"]
     inline = [
       "DEMO_PROJECT_NUM=$(gcloud projects describe ${var.gcp_image_users[0]} --format='value(projectNumber)')",
-      "gcloud compute images add-iam-policy-binding ${build.ID} --project=${var.gcp_project_id} --member=\"serviceAccount:$${DEMO_PROJECT_NUM}@cloudservices.gserviceaccount.com\" --role='roles/compute.imageUser'"
+      "gcloud compute images add-iam-policy-binding ${local.image_name} --project=${var.gcp_project_id} --member=\"serviceAccount:$${DEMO_PROJECT_NUM}@cloudservices.gserviceaccount.com\" --role='roles/compute.imageUser'"
     ]
   }
 }
