@@ -122,7 +122,9 @@ def _aws_get(path: str, token: str) -> str:
 def get_aws_metadata() -> dict:
     token = _aws_token()
     instance_id = _aws_get("/instance-id", token)
-    region = _aws_get("/placement/availability-zone", token)
+    az = _aws_get("/placement/availability-zone", token)
+    # Extract region from AZ (us-east-1a → us-east-1)
+    region = az.rstrip("abcdef")
     machine_type = _aws_get("/instance-type", token)
 
     # Enumerate network interfaces by MAC
@@ -133,10 +135,12 @@ def get_aws_metadata() -> dict:
         if not mac:
             continue
         base = f"/network/interfaces/macs/{mac}"
-        private_ip = _aws_get(f"{base}/local-ipv4s", token)
+        private_ips = _aws_get(f"{base}/local-ipv4s", token)
+        private_ip = private_ips.split("\n")[0].strip()
         vpc_id = _aws_get(f"{base}/vpc-id", token)
         try:
-            public_ip = _aws_get(f"{base}/public-ipv4s", token)
+            public_ips = _aws_get(f"{base}/public-ipv4s", token)
+            public_ip = public_ips.split("\n")[0].strip() if public_ips else None
         except Exception:
             public_ip = None
 
