@@ -27,12 +27,51 @@ jobs:
       - name: Check Packer formatting
         working-directory: packer
         run: |
-          packer fmt -check -diff .
-          if [ $? -ne 0 ]; then
-            echo "Packer template is not properly formatted. Run 'packer fmt .' to fix."
+          if ! packer fmt -check -diff .; then
+            echo "::error::Packer template is not properly formatted. Run 'packer fmt .' to fix."
             exit 1
           fi
 
       - name: Validate Packer template
         working-directory: packer
         run: packer validate -var "app_zip_path=webapp.zip" .
+
+
+# name: Packer Validate
+
+# on:
+#   pull_request:
+#     branches:
+#       - main
+
+# jobs:
+#   validate:
+#     name: Validate Packer Templates
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Setup Packer
+#         uses: hashicorp/setup-packer@main
+
+#       - name: Initialize Packer plugins
+#         working-directory: packer
+#         run: packer init .
+
+#       - name: Create dummy artifact for validation
+#         run: touch packer/webapp.zip
+
+#       - name: Check Packer formatting
+#         working-directory: packer
+#         run: |
+#           packer fmt -check -diff .
+#           if [ $? -ne 0 ]; then
+#             echo "Packer template is not properly formatted. Run 'packer fmt .' to fix."
+#             exit 1
+#           fi
+
+#       - name: Validate Packer template
+#         working-directory: packer
+#         run: packer validate -var "app_zip_path=webapp.zip" .
