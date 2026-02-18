@@ -86,6 +86,8 @@ resource "google_compute_instance" "application" {
 
   tags = var.network_tags
 
+  deletion_protection = false
+
   metadata = {
     environment = var.environment
   }

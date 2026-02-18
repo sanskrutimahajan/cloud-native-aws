@@ -2,9 +2,12 @@ gcp_project  = "your-gcp-project-id"
 gcp_region   = "us-central1"
 environment  = "dev"
 vpc_name     = "csye6225-vpc"
-network_tags = ["web-server"]
+network_tags = ["webapp"]
 
 public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
 zones                = ["us-central1-a", "us-central1-b", "us-central1-c"]
-allowed_ports        = ["22", "80", "443"]
+allowed_ports        = ["22", "80", "443", "8080"]
+
+gcp_image_name = "projects/sanskruti-dev/global/images/family/csye6225-webapp"
+machine_type   = "e2-medium"

@@ -48,12 +48,13 @@ variable "allowed_ports" {
 variable "network_tags" {
   description = "Network tags for firewall rules to target"
   type        = list(string)
-  default     = ["web-server"]
+  default     = ["webapp"]
 }
 
 variable "gcp_image_name" {
-  description = "Custom GCP image name for the Compute Engine instance"
+  description = "Custom GCP image for the Compute Engine instance"
   type        = string
+  default     = "projects/sanskruti-dev/global/images/family/csye6225-webapp"
 }
 
 variable "machine_type" {
