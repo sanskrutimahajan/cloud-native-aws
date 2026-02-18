@@ -46,11 +46,6 @@ variable "availability_zones" {
   default     = ["us-east-1a", "us-east-1b", "us-east-1c"]
 }
 
-variable "my_ip_cidr" {
-  description = "Your IP address in CIDR notation for SSH access"
-  type        = string
-}
-
 variable "application_port" {
   description = "Port the application runs on"
   type        = number
@@ -74,7 +69,7 @@ variable "instance_type" {
   default     = "t2.micro"
 }
 
-variable "key_name" {
-  description = "SSH key pair name for EC2 instance"
-  type        = string
-}
+# variable "key_name" {
+#   description = "SSH key pair name for EC2 instance"
+#   type        = string
+# }
