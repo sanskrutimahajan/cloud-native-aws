@@ -1,13 +1,16 @@
 name: Packer Build
 
 on:
-  push:
+  pull_request:
+    types:
+      - closed
     branches:
       - main
 
 jobs:
   integration-tests:
     name: Run Integration Tests
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     services:

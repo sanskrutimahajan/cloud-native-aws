@@ -175,34 +175,15 @@ log "Enabling csye6225 service to start on boot..."
 systemctl enable csye6225.service
 
 # ============================================
-# 14. Start the Service
+# NOTE: Do NOT start the service here.
+# The service will start automatically on boot
+# when an instance is launched from this image.
+# Starting it during image build will fail since
+# the database may not be fully ready.
 # ============================================
-log "Starting csye6225 service..."
-systemctl start csye6225.service
-
-# ============================================
-# 15. Verify Service Status
-# ============================================
-log "Verifying service status..."
-sleep 2
-
-if systemctl is-active --quiet csye6225.service; then
-    log "Service is running successfully"
-    systemctl status csye6225.service --no-pager -l
-else
-    log "WARNING: Service failed to start"
-    log "Check logs with: sudo journalctl -u csye6225.service -n 50"
-    systemctl status csye6225.service --no-pager -l
-fi
 
 log "============================================"
 log "Application setup completed successfully!"
 log "============================================"
 log ""
-log "Useful SystemD commands:"
-log "  View status:  sudo systemctl status csye6225.service"
-log "  Start:        sudo systemctl start csye6225.service"
-log "  Stop:         sudo systemctl stop csye6225.service"
-log "  Restart:      sudo systemctl restart csye6225.service"
-log "  View logs:    sudo journalctl -u csye6225.service -f"
-log "  Recent logs:  sudo journalctl -u csye6225.service -n 50"
+log "The csye6225 service is enabled and will start automatically on boot."
