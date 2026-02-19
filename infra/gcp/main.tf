@@ -92,3 +92,17 @@ resource "google_compute_instance" "application" {
     environment = var.environment
   }
 }
+
+# Share image with demo project
+data "google_project" "demo" {
+  count      = var.demo_project != null ? 1 : 0
+  project_id = var.demo_project
+}
+
+resource "google_compute_image_iam_member" "demo_share" {
+  count   = var.demo_project != null ? 1 : 0
+  project = var.gcp_project
+  image   = var.gcp_image_name
+  role    = "roles/compute.imageUser"
+  member  = "serviceAccount:${data.google_project.demo[0].number}@cloudservices.gserviceaccount.com"
+}

@@ -62,3 +62,9 @@ variable "machine_type" {
   type        = string
   default     = "e2-medium"
 }
+
+variable "demo_project" {
+  description = "GCP demo project ID to share the image with"
+  type        = string
+  default     = null
+}
