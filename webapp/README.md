@@ -28,14 +28,14 @@ All dependencies are listed in `requirements.txt`.
 The `scripts/setup.sh` script automates the complete setup on a fresh Ubuntu 24.04 LTS server. It performs the following steps:
 
 1. Updates and upgrades system packages
-2. Installs and enables PostgreSQL
+2. Installs and starts PostgreSQL
 3. Creates the application database and database user
-4. Installs Python 3, pip, and venv
-5. Creates a dedicated Linux group and user (`csye6225`)
-6. Deploys application files to `/opt/csye6225/`
-7. Sets up a Python virtual environment and installs dependencies
-8. Sets file ownership and permissions
-9. Verifies the installation
+4. Creates a dedicated Linux group and user (`csye6225`)
+5. Deploys application files to `/opt/csye6225/`
+6. Installs Python 3, pip, venv, and all dependencies
+7. Sets file ownership and permissions
+8. Creates the `.env` file with database credentials
+9. Creates a systemd service and enables it to start on boot
 
 ### Usage
 ```bash
@@ -44,9 +44,10 @@ cd webapp_fork
 sudo bash scripts/setup.sh
 ```
 
-After setup completes, update the database password in `/opt/csye6225/.env`, then start the application:
+After setup completes, the `csye6225` service is enabled and will start automatically on boot. To start it manually:
 ```bash
-sudo -u csye6225 /opt/csye6225/venv/bin/python /opt/csye6225/run.py
+sudo systemctl start csye6225.service
+sudo systemctl status csye6225.service
 ```
 
 ## Manual Setup (Development)
@@ -114,7 +115,7 @@ Custom AMIs (AWS) and GCP Images are built using HashiCorp Packer. Templates are
 | Trigger | Workflow | Action |
 |---|---|---|
 | Pull request to `main` | `packer-validate.yml` | Validates Packer template formatting and syntax |
-| Push to `main` | `packer-build.yml` | Runs integration tests, then builds and shares images |
+| PR merged into `main` | `packer-build.yml` | Runs integration tests, then builds and shares images |
 
 ## Security
 - Passwords are hashed using BCrypt with auto-generated salts
@@ -123,7 +124,7 @@ Custom AMIs (AWS) and GCP Images are built using HashiCorp Packer. Templates are
 - Use environment variables for all sensitive configuration
   
 ## Testing
-The application includes 134 comprehensive integration tests covering:
+The application includes 152 comprehensive integration tests covering:
 - Positive test cases (creation, retrieval, update, authentication)
 - Negative test cases (invalid inputs, auth errors, wrong methods)
 - Edge cases (boundary values, concurrency, performance, security)
