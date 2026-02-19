@@ -112,7 +112,7 @@ class TestMetadataCacheHeaders:
         assert r.headers["Pragma"] == "no-cache"
 
     def test_cache_headers_on_400_body(self, client):
-        r = client.get(ENDPOINT, content=b'{"key": "value"}')
+        r = client.request("GET", ENDPOINT, content=b'{"key": "value"}')
         assert r.headers["Cache-Control"] == "no-cache, no-store, must-revalidate"
         assert r.headers["Pragma"] == "no-cache"
 
@@ -138,7 +138,7 @@ class TestMetadataBadRequest:
         assert "timestamp" in data
 
     def test_request_body_rejected(self, client):
-        r = client.get(ENDPOINT, content=b'{"key": "value"}')
+        r = client.request("GET", ENDPOINT, content=b'{"key": "value"}')
         assert r.status_code == 400
         data = r.json()
         assert data["error"] == "Bad Request"

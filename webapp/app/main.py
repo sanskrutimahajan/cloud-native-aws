@@ -1,4 +1,3 @@
-import inspect
 import json
 import logging
 from datetime import datetime, timezone
@@ -9,7 +8,6 @@ from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from starlette.testclient import TestClient as StarletteTestClient
 
 from app.auth import get_current_user, hash_password
 from app.database import get_db, init_db
@@ -29,18 +27,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-# Patch Starlette TestClient.get to accept `content=` (tests call client.get(..., content=...))
-if "content" not in inspect.signature(StarletteTestClient.get).parameters:
-    _orig_get = StarletteTestClient.get
-
-    def _patched_get(self, url, **kwargs):
-        if "content" in kwargs:
-            content = kwargs.pop("content")
-            return self.request("GET", url, content=content, **kwargs)
-        return _orig_get(self, url, **kwargs)
-
-    StarletteTestClient.get = _patched_get
 
 app = FastAPI(
     title="Cloud-Native Web Application",
