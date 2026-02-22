@@ -20,6 +20,9 @@ class Settings:
     APP_HOST: str = os.getenv("APP_HOST", "0.0.0.0")
     APP_PORT: int = int(os.getenv("APP_PORT", "8080"))
 
+    # S3 settings (injected via EC2 user data)
+    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "")
+
     @property
     def DATABASE_URL(self) -> str:
         return f"postgresql://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"
