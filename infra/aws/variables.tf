@@ -73,3 +73,51 @@ variable "instance_type" {
 #   description = "SSH key pair name for EC2 instance"
 #   type        = string
 # }
+
+variable "db_identifier" {
+  description = "RDS instance identifier"
+  type        = string
+  default     = "csye6225"
+}
+
+variable "db_name" {
+  description = "Name of the database"
+  type        = string
+  default     = "csye6225"
+}
+
+variable "db_username" {
+  description = "Master username for the RDS instance"
+  type        = string
+  default     = "csye6225"
+}
+
+variable "db_password" {
+  description = "Master password for the RDS instance"
+  type        = string
+  sensitive   = true
+}
+
+variable "db_engine" {
+  description = "Database engine (postgres, mysql, or mariadb)"
+  type        = string
+  default     = "postgres"
+}
+
+variable "db_engine_version" {
+  description = "Database engine version"
+  type        = string
+  default     = "16"
+}
+
+variable "db_parameter_group_family" {
+  description = "DB parameter group family (e.g., postgres16, mysql8.0, mariadb10.11)"
+  type        = string
+  default     = "postgres16"
+}
+
+variable "db_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.micro"
+}

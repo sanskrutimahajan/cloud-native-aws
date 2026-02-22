@@ -52,3 +52,28 @@ output "instance_public_ip" {
   description = "Public IP of the EC2 instance"
   value       = aws_instance.application.public_ip
 }
+
+output "s3_bucket_name" {
+  description = "Name of the S3 syllabus bucket"
+  value       = aws_s3_bucket.syllabus.bucket
+}
+
+output "rds_endpoint" {
+  description = "RDS instance hostname"
+  value       = aws_db_instance.main.address
+}
+
+output "rds_port" {
+  description = "RDS instance port"
+  value       = aws_db_instance.main.port
+}
+
+output "iam_role_arn" {
+  description = "ARN of the EC2 IAM role"
+  value       = aws_iam_role.ec2_role.arn
+}
+
+output "iam_instance_profile_name" {
+  description = "Name of the EC2 instance profile"
+  value       = aws_iam_instance_profile.ec2_profile.name
+}
