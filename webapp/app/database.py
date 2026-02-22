@@ -36,7 +36,7 @@ def get_db():
 # Creates tables on startup, skips if DB is down
 def init_db():
     try:
-        from app.models import HealthCheck, User
+        from app.models import Course, HealthCheck, Syllabus, User
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")
     except Exception as e:

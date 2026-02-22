@@ -29,9 +29,20 @@ def create_error_response(request: Request, error_type: str, message: str, statu
         headers=headers or {}
     )
 
+
 # 400 Bad Request
 def validation_error_response(request: Request, message: str = "Validation error"):
     return create_error_response(request, "Validation Error", message, status.HTTP_400_BAD_REQUEST)
+
+
+# 400 Bad Request (generic)
+def bad_request_response(request: Request, message: str = "Bad Request"):
+    return create_error_response(request, "Bad Request", message, status.HTTP_400_BAD_REQUEST)
+
+
+# 404 Not Found
+def not_found_response(request: Request, message: str = "Resource not found"):
+    return create_error_response(request, "Not Found", message, status.HTTP_404_NOT_FOUND)
 
 
 # 409 Conflict

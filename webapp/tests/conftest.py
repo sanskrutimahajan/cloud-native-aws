@@ -3,7 +3,9 @@ Test Configuration - Sets up test database, fixtures, and FastAPI test client
 """
 
 import base64
+import io
 import os
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,7 +15,7 @@ from sqlalchemy.orm import sessionmaker
 from app.auth import hash_password
 from app.database import Base, get_db
 from app.main import app
-from app.models import User
+from app.models import Course, Syllabus, User
 
 DB_HOST = os.getenv("DATABASE_HOST", "localhost")
 DB_PORT = os.getenv("DATABASE_PORT", "5432")
@@ -60,7 +62,7 @@ def db_session():
 
 @pytest.fixture(scope="function")
 def client(db_session):
-    """FastAPI TestClient with DB dependency overridden to use test session."""
+    """FastAPI TestClient with DB dependency overridden and S3 mocked."""
     def override_get_db():
         try:
             yield db_session
@@ -68,8 +70,15 @@ def client(db_session):
             pass
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
+
+    # Mock S3 operations so tests don't need real AWS credentials
+    with patch("app.s3.get_s3_client") as mock_client, \
+         patch("app.s3.get_bucket_name", return_value="test-bucket-uuid"):
+        mock_s3 = MagicMock()
+        mock_client.return_value = mock_s3
+        with TestClient(app) as c:
+            yield c
+
     app.dependency_overrides.clear()
 
 
@@ -111,3 +120,50 @@ def test_user_with_auth(create_test_user, auth_headers):
     user, password = create_test_user()
     headers = auth_headers(user.username, password)
     return user, headers
+
+
+@pytest.fixture
+def create_test_course(db_session):
+    """Factory fixture to create a course directly in the DB."""
+    _counter = [0]
+
+    def _create(
+        department_code="CSYE",
+        number=None,
+        title="Test Course",
+        credit_hours=4,
+        classification="core",
+        description=None,
+        prerequisites=None,
+    ):
+        _counter[0] += 1
+        if number is None:
+            number = str(6200 + _counter[0])
+        course = Course(
+            department_code=department_code,
+            number=number,
+            title=title,
+            credit_hours=credit_hours,
+            classification=classification,
+            description=description,
+            prerequisites=prerequisites,
+            has_syllabus=False,
+        )
+        db_session.add(course)
+        db_session.flush()
+        return course
+    return _create
+
+
+@pytest.fixture
+def sample_course_payload():
+    """Returns a valid course creation payload."""
+    return {
+        "department_code": "ACCT",
+        "number": "3220",
+        "title": "Data Analytics for Advisory Services",
+        "credit_hours": 4,
+        "classification": "elective",
+        "description": "Covers data analytics in advisory services.",
+        "prerequisites": "ACCT 2301 with minimum grade D-",
+    }

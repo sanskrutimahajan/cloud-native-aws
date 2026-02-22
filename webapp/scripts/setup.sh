@@ -30,35 +30,19 @@ log "Upgrading system packages..."
 DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
 
 # ============================================
-# 3. Install PostgreSQL
+# NOTE: No local PostgreSQL installation.
+# The application connects to an RDS instance.
+# Database credentials are injected via EC2 user data.
 # ============================================
-log "Installing PostgreSQL..."
-apt-get install -y postgresql postgresql-contrib
-
-# Start and enable PostgreSQL service
-log "Starting PostgreSQL service..."
-systemctl start postgresql
-systemctl enable postgresql
 
 # ============================================
-# 4. Create Application Database and User
-# ============================================
-log "Creating database and database user..."
-
-sudo -u postgres psql -c "CREATE USER webapp_user WITH PASSWORD 'webapp_pass123';" 2>/dev/null || log "User webapp_user already exists"
-sudo -u postgres psql -c "CREATE DATABASE webapp_db OWNER webapp_user;" 2>/dev/null || log "Database webapp_db already exists"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE webapp_db TO webapp_user;"
-
-log "Database setup completed"
-
-# ============================================
-# 5. Create Application Linux Group
+# 3. Create Application Linux Group
 # ============================================
 log "Creating application group..."
 groupadd -f csye6225
 
 # ============================================
-# 6. Create Application User Account
+# 4. Create Application User Account
 # ============================================
 log "Creating application user..."
 if ! id -u csye6225 > /dev/null 2>&1; then
@@ -69,7 +53,7 @@ else
 fi
 
 # ============================================
-# 7. Deploy Application Files
+# 5. Deploy Application Files
 # ============================================
 log "Installing unzip..."
 apt-get install -y unzip
@@ -81,7 +65,7 @@ log "Extracting application files..."
 unzip -o /home/ubuntu/webapp.zip -d /opt/csye6225
 
 # ============================================
-# 8. Install Python Dependencies
+# 6. Install Python Dependencies
 # ============================================
 log "Installing Python pip and venv..."
 apt-get install -y python3-pip python3-venv
@@ -96,7 +80,7 @@ log "Installing Python dependencies..."
 log "Python dependencies installed successfully"
 
 # ============================================
-# 9. Set File Permissions
+# 7. Set File Permissions
 # ============================================
 log "Setting file permissions..."
 
@@ -118,15 +102,12 @@ find /opt/csye6225/venv/bin -type f -exec chmod 755 {} \;
 log "File permissions set successfully"
 
 # ============================================
-# 10. Create Environment File
+# 8. Create Environment File (placeholder)
+# Actual values will be injected by EC2 user data
 # ============================================
-log "Creating environment file..."
+log "Creating placeholder environment file..."
 cat > /opt/csye6225/.env << EOF
-DATABASE_HOST=localhost
-DATABASE_PORT=5432
-DATABASE_NAME=webapp_db
-DATABASE_USER=webapp_user
-DATABASE_PASSWORD=webapp_pass123
+# Database and S3 config will be injected by EC2 user data at launch
 EOF
 
 chown csye6225:csye6225 /opt/csye6225/.env
@@ -134,14 +115,14 @@ chmod 600 /opt/csye6225/.env
 log "Environment file created with restricted permissions"
 
 # ============================================
-# 11. Create SystemD Service File
+# 9. Create SystemD Service File
 # ============================================
 log "Creating SystemD service file..."
 
 cat > /etc/systemd/system/csye6225.service << 'EOF'
 [Unit]
 Description=CSYE 6225 Web Application
-After=network.target postgresql.service
+After=network.target
 
 [Service]
 Type=simple
@@ -163,13 +144,13 @@ EOF
 log "SystemD service file created at /etc/systemd/system/csye6225.service"
 
 # ============================================
-# 12. Reload SystemD Daemon
+# 10. Reload SystemD Daemon
 # ============================================
 log "Reloading SystemD daemon to recognize new service..."
 systemctl daemon-reload
 
 # ============================================
-# 13. Enable Service (Start on Boot)
+# 11. Enable Service (Start on Boot)
 # ============================================
 log "Enabling csye6225 service to start on boot..."
 systemctl enable csye6225.service
@@ -178,8 +159,8 @@ systemctl enable csye6225.service
 # NOTE: Do NOT start the service here.
 # The service will start automatically on boot
 # when an instance is launched from this image.
-# Starting it during image build will fail since
-# the database may not be fully ready.
+# EC2 user data will write the .env file with
+# real DB and S3 config before the service starts.
 # ============================================
 
 log "============================================"
@@ -187,3 +168,5 @@ log "Application setup completed successfully!"
 log "============================================"
 log ""
 log "The csye6225 service is enabled and will start automatically on boot."
+log "EC2 user data must inject DATABASE_HOST, DATABASE_PORT, DATABASE_NAME,"
+log "DATABASE_USER, DATABASE_PASSWORD, and S3_BUCKET_NAME into /opt/csye6225/.env"
