@@ -12,3 +12,12 @@ availability_zones   = ["us-east-1a", "us-east-1b", "us-east-1c"]
 
 ami_id        = "ami-xxxxxxxxxxxxxxxxx"
 instance_type = "t2.micro"
+
+db_identifier             = "csye6225"
+db_name                   = "csye6225"
+db_username               = "csye6225"
+db_password               = "YourStrongPasswordHere"
+db_engine                 = "postgres"
+db_engine_version         = "16"
+db_parameter_group_family = "postgres16"
+db_instance_class         = "db.t3.micro"
