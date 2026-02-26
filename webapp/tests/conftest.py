@@ -3,7 +3,6 @@ Test Configuration - Sets up test database, fixtures, and FastAPI test client
 """
 
 import base64
-import io
 import os
 from unittest.mock import MagicMock, patch
 

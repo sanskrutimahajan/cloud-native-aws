@@ -243,7 +243,7 @@ async def update_user(
     allowed = {"first_name", "last_name", "password"}
     disallowed = set(data.keys()) - allowed
     if disallowed:
-        return validation_error_response(request, f"Field '{list(disallowed)[0]}' cannot be updated")
+        return bad_request_response(request, f"Field '{list(disallowed)[0]}' cannot be updated")
 
     if "first_name" in data:
         if not isinstance(data["first_name"], str):

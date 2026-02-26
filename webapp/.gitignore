@@ -32,3 +32,10 @@ htmlcov/
 
 # Distribution
 *.whl
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+*.tfvars
