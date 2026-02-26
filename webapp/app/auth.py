@@ -39,14 +39,4 @@ def get_current_user(credentials: HTTPBasicCredentials = Depends(security), db: 
             headers={"WWW-Authenticate": "Basic realm=\"Access to course catalog\""}
         )
 
-    # Check if user account is verified (if the field exists)
-    # For A05, users created via POST /v1/user are considered verified
-    # If you add an `is_verified` column later, uncomment the check below:
-    # if not user.is_verified:
-    #     raise APIException(
-    #         error_type="Forbidden",
-    #         message="Account has not been verified. Please check your email.",
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #     )
-
     return user

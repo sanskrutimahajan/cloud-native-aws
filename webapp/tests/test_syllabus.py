@@ -2,8 +2,6 @@
 
 import uuid
 from io import BytesIO
-from unittest.mock import patch, MagicMock
-
 import pytest
 
 

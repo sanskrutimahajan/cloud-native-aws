@@ -565,7 +565,7 @@ class TestSecurityAndEdgeCases:
             "password": "password123"
         }
         response = client.post("/v1/user", json=payload)
-        assert response.status_code in [400, 500]
+        assert response.status_code == 400
 
 
 class TestBoundaryValues:
