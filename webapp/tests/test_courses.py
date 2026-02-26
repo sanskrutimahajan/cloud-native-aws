@@ -1,5 +1,6 @@
 """Tests for /v1/courses endpoints."""
 
+import time
 import uuid
 from datetime import datetime
 
@@ -199,11 +200,6 @@ class TestGetCoursesPositive:
         assert r.status_code == 200
         assert r.json()["id"] == str(course.id)
 
-    def test_get_course_not_found(self, client, test_user_with_auth):
-        _, headers = test_user_with_auth
-        r = client.get(f"/v1/courses/{uuid.uuid4()}", headers=headers)
-        assert r.status_code == 404
-
 
 class TestGetCoursesNegative:
 
@@ -214,6 +210,11 @@ class TestGetCoursesNegative:
     def test_get_course_no_auth(self, client):
         r = client.get(f"/v1/courses/{uuid.uuid4()}")
         assert r.status_code == 401
+
+    def test_get_course_not_found(self, client, test_user_with_auth):
+        _, headers = test_user_with_auth
+        r = client.get(f"/v1/courses/{uuid.uuid4()}", headers=headers)
+        assert r.status_code == 404
 
 
 class TestUpdateCoursePositive:
@@ -243,7 +244,7 @@ class TestUpdateCoursePositive:
         _, headers = test_user_with_auth
         course = create_test_course()
         original = client.get(f"/v1/courses/{course.id}", headers=headers).json()["date_updated"]
-        import time; time.sleep(0.05)
+        time.sleep(0.05)
         client.put(f"/v1/courses/{course.id}", json={"title": "Changed"}, headers=headers)
         updated = client.get(f"/v1/courses/{course.id}", headers=headers).json()["date_updated"]
         assert updated >= original

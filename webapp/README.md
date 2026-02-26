@@ -6,7 +6,7 @@ Cloud-native web application for CSYE 6225. Built with FastAPI and PostgreSQL, i
 
 **Local development:**
 - Python 3.10 or higher
-- PostgreSQL 16
+- PostgreSQL 16 (local development and CI only — production uses AWS RDS)
 - pip (Python package manager)
 - Git
 

@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import List
 
@@ -33,11 +34,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    detect_platform()
+    yield
+
+
 app = FastAPI(
     title="Cloud-Native Web Application",
     version="1.0.0",
     docs_url=None,
     redoc_url=None,
+    lifespan=lifespan,
 )
 
 CACHE_HEADERS = {
@@ -54,11 +63,6 @@ VALID_CLASSIFICATIONS = {"core", "elective"}
 COURSE_IMMUTABLE_FIELDS = {"id", "department_code", "number", "has_syllabus", "date_created", "date_updated"}
 COURSE_UPDATABLE_FIELDS = {"title", "credit_hours", "classification", "description", "prerequisites"}
 
-
-@app.on_event("startup")
-async def startup_event():
-    init_db()
-    detect_platform()
 
 
 # ──────────────────────────────────────────────
@@ -176,6 +180,10 @@ async def create_user(request: Request, response: Response, db: Session = Depend
         return validation_error_response(request, "First name and last name must be strings")
     if not data["first_name"].strip() or not data["last_name"].strip():
         return validation_error_response(request, "First name and last name cannot be empty or whitespace")
+    if len(data["first_name"]) > 100:
+        return validation_error_response(request, "First name must be 100 characters or fewer")
+    if len(data["last_name"]) > 100:
+        return validation_error_response(request, "Last name must be 100 characters or fewer")
     if not isinstance(data["password"], str):
         return validation_error_response(request, "Password must be a string")
     if not data["password"].strip():
@@ -242,12 +250,16 @@ async def update_user(
             return validation_error_response(request, "First name must be a string")
         if not data["first_name"].strip():
             return validation_error_response(request, "First name cannot be empty")
+        if len(data["first_name"]) > 100:
+            return validation_error_response(request, "First name must be 100 characters or fewer")
         current_user.first_name = data["first_name"]
     if "last_name" in data:
         if not isinstance(data["last_name"], str):
             return validation_error_response(request, "Last name must be a string")
         if not data["last_name"].strip():
             return validation_error_response(request, "Last name cannot be empty")
+        if len(data["last_name"]) > 100:
+            return validation_error_response(request, "Last name must be 100 characters or fewer")
         current_user.last_name = data["last_name"]
     if "password" in data:
         if not isinstance(data["password"], str):
