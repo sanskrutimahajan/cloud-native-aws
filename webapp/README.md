@@ -29,6 +29,7 @@ Cloud-native web application for CSYE 6225. Built with FastAPI and PostgreSQL, i
 | python-dotenv | 1.0.0 | Environment variable loading |
 | boto3 | 1.35.0 | AWS SDK — S3 file upload/delete |
 | python-multipart | 0.0.6 | Multipart form data (file uploads) |
+| statsd | 4.0.1 | StatsD client — emits custom metrics to CloudWatch Agent |
 | pytest | 7.4.3 | Test framework |
 | httpx | 0.25.2 | HTTP test client |
 | pytest-cov | 4.1.0 | Test coverage reporting |
@@ -61,9 +62,13 @@ The script performs:
 2. Creates a dedicated Linux group and user (`csye6225`)
 3. Deploys application files to `/opt/csye6225/`
 4. Installs Python 3, pip, venv, and all dependencies
-5. Sets file ownership and permissions
-6. Creates a placeholder `.env` file (overwritten by EC2 user data at launch)
-7. Creates and enables a systemd service (`csye6225.service`) to start on boot
+5. Creates the application log directory at `/var/log/webapp/` with correct ownership
+6. Sets file ownership and permissions
+7. Creates a placeholder `.env` file (overwritten by EC2 user data at launch)
+8. Creates and enables a systemd service (`csye6225.service`) to start on boot
+9. Downloads and installs the Unified CloudWatch Agent
+10. Copies `cloudwatch-config.json` to the CloudWatch Agent configuration directory
+11. Enables the `amazon-cloudwatch-agent` systemd service to start on boot
 
 EC2 user data (from Terraform) writes the following into `/opt/csye6225/.env` before the service starts:
 ```
@@ -171,6 +176,36 @@ To prevent name collisions when two courses upload files with the same name:
 ```
 Example: `c3d4e5f6-.../a1b2c3d4-.../syllabus.pdf`
 
+## Logging & Metrics
+
+### Application Logs
+All application logs are written to `/var/log/webapp/csye6225.log` and to stdout (journald). The Unified CloudWatch Agent ships these logs to CloudWatch Logs automatically.
+
+| Setting | Value |
+|---|---|
+| Log file | `/var/log/webapp/csye6225.log` |
+| CloudWatch log group | `csye6225-webapp` |
+| Log stream | `{instance_id}` |
+| Retention | 7 days |
+| Format | `timestamp LEVEL logger message` |
+
+### Custom Metrics (StatsD → CloudWatch)
+The application emits custom metrics via StatsD to the CloudWatch Agent listening on `localhost:8125`. Metrics are published to the `csye6225-webapp` CloudWatch namespace.
+
+| Metric type | Metric name pattern | Description |
+|---|---|---|
+| Counter | `csye6225.api.<endpoint>.count` | Number of times each API is called |
+| Timer | `csye6225.api.<endpoint>.duration` | End-to-end API call duration (ms) |
+| Timer | `csye6225.db.<operation>.duration` | Database query duration (ms) |
+| Timer | `csye6225.s3.<operation>.duration` | S3 operation duration (ms) |
+
+The CloudWatch Agent must be started by EC2 user data using:
+```bash
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -s \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+```
+
 ## Packer — Custom Machine Images
 
 Custom AMIs (AWS) and GCP images are built using HashiCorp Packer. Templates are in the `packer/` directory.
@@ -190,7 +225,7 @@ Custom AMIs (AWS) and GCP images are built using HashiCorp Packer. Templates are
 | PR merged into `main` | `packer-build.yml` | Runs integration tests, then builds and shares AMI/GCP images |
 
 ### CI Database
-Integration tests in GitHub Actions use a local PostgreSQL 16 service container. S3 calls are mocked in the test suite using `unittest.mock.patch` — no real AWS credentials are needed in CI.
+Integration tests in GitHub Actions use a local PostgreSQL 16 service container. S3 calls and the StatsD metrics client are mocked in the test suite using `unittest.mock.patch` — no real AWS credentials or CloudWatch Agent are needed in CI.
 
 ## Security
 - Passwords are hashed using BCrypt with auto-generated salts

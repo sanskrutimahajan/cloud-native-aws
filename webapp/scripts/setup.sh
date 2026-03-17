@@ -1,16 +1,12 @@
 #!/bin/bash
 
-# Exit immediately if a command exits with a non-zero status
 set -e
 
-# Check if running as root
 if [ "$EUID" -ne 0 ]; then
     echo "ERROR: This script must be run as root"
-    echo "Please run: sudo ./setup.sh"
     exit 1
 fi
 
-# Log function for better visibility
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
 }
@@ -18,33 +14,18 @@ log() {
 log "Starting application setup..."
 
 # ============================================
-# 1. Update Package Lists
+# 1. Update & Upgrade
 # ============================================
 log "Updating package lists..."
 apt-get update -y
-
-# ============================================
-# 2. Upgrade System Packages
-# ============================================
 log "Upgrading system packages..."
 DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
 
 # ============================================
-# NOTE: No local PostgreSQL installation.
-# The application connects to an RDS instance.
-# Database credentials are injected via EC2 user data.
+# 2. Create Application Group & User
 # ============================================
-
-# ============================================
-# 3. Create Application Linux Group
-# ============================================
-log "Creating application group..."
+log "Creating application group and user..."
 groupadd -f csye6225
-
-# ============================================
-# 4. Create Application User Account
-# ============================================
-log "Creating application user..."
 if ! id -u csye6225 > /dev/null 2>&1; then
     useradd -r -g csye6225 -s /usr/sbin/nologin csye6225
     log "User csye6225 created"
@@ -53,7 +34,7 @@ else
 fi
 
 # ============================================
-# 5. Deploy Application Files
+# 3. Deploy Application Files
 # ============================================
 log "Installing unzip..."
 apt-get install -y unzip
@@ -65,7 +46,7 @@ log "Extracting application files..."
 unzip -o /home/ubuntu/webapp.zip -d /opt/csye6225
 
 # ============================================
-# 6. Install Python Dependencies
+# 4. Install Python Dependencies
 # ============================================
 log "Installing Python pip and venv..."
 apt-get install -y python3-pip python3-venv
@@ -76,49 +57,41 @@ python3 -m venv /opt/csye6225/venv
 
 log "Installing Python dependencies..."
 /opt/csye6225/venv/bin/pip install -r /opt/csye6225/requirements.txt
-
 log "Python dependencies installed successfully"
 
 # ============================================
-# 7. Set File Permissions
+# 5. Create Log Directory
+# ============================================
+log "Creating application log directory..."
+mkdir -p /var/log/webapp
+chown csye6225:csye6225 /var/log/webapp
+chmod 755 /var/log/webapp
+
+# ============================================
+# 6. Set File Permissions
 # ============================================
 log "Setting file permissions..."
-
-# Change ownership to application user and group
 chown -R csye6225:csye6225 /opt/csye6225
-
-# Set directory permissions (755: owner can read/write/execute, others can read/execute)
 find /opt/csye6225 -type d -exec chmod 755 {} \;
-
-# Set file permissions (644: owner can read/write, others can only read)
 find /opt/csye6225 -type f -exec chmod 644 {} \;
-
-# Make run.py executable
 chmod 755 /opt/csye6225/run.py
-
-# Restore execute permissions on venv binaries
 find /opt/csye6225/venv/bin -type f -exec chmod 755 {} \;
-
 log "File permissions set successfully"
 
 # ============================================
-# 8. Create Environment File (placeholder)
-# Actual values will be injected by EC2 user data
+# 7. Create Placeholder .env
 # ============================================
 log "Creating placeholder environment file..."
 cat > /opt/csye6225/.env << EOF
 # Database and S3 config will be injected by EC2 user data at launch
 EOF
-
 chown csye6225:csye6225 /opt/csye6225/.env
 chmod 600 /opt/csye6225/.env
-log "Environment file created with restricted permissions"
 
 # ============================================
-# 9. Create SystemD Service File
+# 8. Create SystemD Service File
 # ============================================
 log "Creating SystemD service file..."
-
 cat > /etc/systemd/system/csye6225.service << 'EOF'
 [Unit]
 Description=CSYE 6225 Web Application
@@ -141,32 +114,46 @@ SyslogIdentifier=csye6225
 WantedBy=multi-user.target
 EOF
 
-log "SystemD service file created at /etc/systemd/system/csye6225.service"
+# ============================================
+# 9. Install CloudWatch Agent
+# ============================================
+log "Downloading CloudWatch Unified Agent..."
+wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb \
+    -O /tmp/amazon-cloudwatch-agent.deb
+log "Installing CloudWatch Agent..."
+dpkg -i /tmp/amazon-cloudwatch-agent.deb
+rm -f /tmp/amazon-cloudwatch-agent.deb
+log "CloudWatch Agent installed successfully"
 
 # ============================================
-# 10. Reload SystemD Daemon
+# 10. Copy CloudWatch Agent Configuration
 # ============================================
-log "Reloading SystemD daemon to recognize new service..."
+log "Copying CloudWatch Agent configuration..."
+cp /opt/csye6225/cloudwatch-config.json \
+    /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+log "CloudWatch Agent configuration copied"
+
+# ============================================
+# 11. Enable Services
+# ============================================
+log "Reloading SystemD daemon..."
 systemctl daemon-reload
 
-# ============================================
-# 11. Enable Service (Start on Boot)
-# ============================================
-log "Enabling csye6225 service to start on boot..."
+log "Enabling csye6225 service..."
 systemctl enable csye6225.service
 
+log "Enabling CloudWatch Agent service..."
+systemctl enable amazon-cloudwatch-agent.service
+
 # ============================================
-# NOTE: Do NOT start the service here.
-# The service will start automatically on boot
-# when an instance is launched from this image.
-# EC2 user data will write the .env file with
-# real DB and S3 config before the service starts.
+# NOTE: Do NOT start services here.
+# EC2 user data will write .env, apply the
+# CloudWatch config, and start both services.
 # ============================================
 
 log "============================================"
 log "Application setup completed successfully!"
 log "============================================"
 log ""
-log "The csye6225 service is enabled and will start automatically on boot."
-log "EC2 user data must inject DATABASE_HOST, DATABASE_PORT, DATABASE_NAME,"
-log "DATABASE_USER, DATABASE_PASSWORD, and S3_BUCKET_NAME into /opt/csye6225/.env"
+log "Services enabled: csye6225, amazon-cloudwatch-agent"
+log "EC2 user data must inject config and start services."

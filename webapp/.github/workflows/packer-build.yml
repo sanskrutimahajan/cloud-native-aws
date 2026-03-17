@@ -73,7 +73,7 @@ jobs:
 
       - name: Build application artifact
         run: |
-          zip -r webapp.zip app/ scripts/ requirements.txt run.py -x "*.pyc" "__pycache__/*" "*.pytest_cache/*"
+          zip -r webapp.zip app/ scripts/ requirements.txt run.py cloudwatch-config.json -x "*.pyc" "__pycache__/*" "*.pytest_cache/*"
           mv webapp.zip packer/
 
       - name: Configure AWS credentials
