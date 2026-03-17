@@ -121,3 +121,13 @@ variable "db_instance_class" {
   type        = string
   default     = "db.t3.micro"
 }
+
+variable "route53_zone_id" {
+  description = "Route 53 hosted zone ID for the subdomain (e.g., dev.sansmah.me)"
+  type        = string
+}
+
+variable "domain_name" {
+  description = "Fully qualified domain name for the application (e.g., dev.sansmah.me)"
+  type        = string
+}
