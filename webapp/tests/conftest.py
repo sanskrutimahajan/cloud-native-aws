@@ -72,7 +72,8 @@ def client(db_session):
 
     # Mock S3 operations so tests don't need real AWS credentials
     with patch("app.s3.get_s3_client") as mock_client, \
-         patch("app.s3.get_bucket_name", return_value="test-bucket-uuid"):
+         patch("app.s3.get_bucket_name", return_value="test-bucket-uuid"), \
+         patch("app.metrics._client"):
         mock_s3 = MagicMock()
         mock_client.return_value = mock_s3
         with TestClient(app) as c:
