@@ -77,3 +77,8 @@ output "iam_instance_profile_name" {
   description = "Name of the EC2 instance profile"
   value       = aws_iam_instance_profile.ec2_profile.name
 }
+
+output "application_url" {
+  description = "Application URL via domain name"
+  value       = "http://${var.domain_name}:${var.application_port}/"
+}
