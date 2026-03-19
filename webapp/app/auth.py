@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 from app.exceptions import APIException
+from app import metrics
 
 security = HTTPBasic()
 
@@ -29,7 +30,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 # Verify Basic Auth credentials and return user
 def get_current_user(credentials: HTTPBasicCredentials = Depends(security), db: Session = Depends(get_db)) -> User:
-    user = db.query(User).filter(func.lower(User.username) == credentials.username.lower()).first()
+    with metrics.Timer("db.auth.user_lookup.duration"):
+        user = db.query(User).filter(func.lower(User.username) == credentials.username.lower()).first()
 
     if not user or not verify_password(credentials.password, user.password):
         raise APIException(
