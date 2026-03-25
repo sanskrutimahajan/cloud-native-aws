@@ -18,7 +18,7 @@ resource "aws_internet_gateway" "main" {
   }
 }
 
-# Public Subnet
+# Public Subnets
 resource "aws_subnet" "public" {
   count                   = 3
   vpc_id                  = aws_vpc.main.id
@@ -80,14 +80,15 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private.id
 }
 
-# Application Security Group
-resource "aws_security_group" "application" {
-  name        = "${var.environment}-${var.vpc_name}-application-sg"
-  description = "Security group for application servers"
+# ── Load Balancer Security Group ───────────────────────────────────────────────
+# Must be defined before the app SG since the app SG references it
+resource "aws_security_group" "load_balancer" {
+  name        = "${var.environment}-${var.vpc_name}-lb-sg"
+  description = "Security group for the application load balancer"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "HTTP"
+    description = "HTTP from internet"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -95,12 +96,33 @@ resource "aws_security_group" "application" {
   }
 
   ingress {
-    description = "HTTPS"
+    description = "HTTPS from internet"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  egress {
+    description = "Allow all outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.environment}-${var.vpc_name}-lb-sg"
+  }
+}
+
+# ── Application Security Group ─────────────────────────────────────────────────
+# Port 8080 now only accepts traffic from the load balancer SG
+# Ports 80/443 removed — the LB handles those
+resource "aws_security_group" "application" {
+  name        = "${var.environment}-${var.vpc_name}-application-sg"
+  description = "Security group for application servers"
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     description = "SSH"
@@ -111,11 +133,11 @@ resource "aws_security_group" "application" {
   }
 
   ingress {
-    description = "Application port"
-    from_port   = var.application_port
-    to_port     = var.application_port
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "Application port from load balancer only"
+    from_port       = var.application_port
+    to_port         = var.application_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.load_balancer.id]
   }
 
   egress {
@@ -131,7 +153,7 @@ resource "aws_security_group" "application" {
   }
 }
 
-# Database Security Group
+# Database Security Group — unchanged
 resource "aws_security_group" "database" {
   name        = "${var.environment}-${var.vpc_name}-database-sg"
   description = "Security group for database servers"
@@ -150,7 +172,7 @@ resource "aws_security_group" "database" {
   }
 }
 
-# S3 Bucket
+# S3 Bucket — unchanged
 resource "random_uuid" "s3_bucket" {}
 
 resource "aws_s3_bucket" "syllabus" {
@@ -163,8 +185,7 @@ resource "aws_s3_bucket" "syllabus" {
 }
 
 resource "aws_s3_bucket_public_access_block" "syllabus" {
-  bucket = aws_s3_bucket.syllabus.id
-
+  bucket                  = aws_s3_bucket.syllabus.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -197,7 +218,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "syllabus" {
   }
 }
 
-# RDS Subnet Group
+# RDS Subnet Group — unchanged
 resource "aws_db_subnet_group" "main" {
   name       = "${var.environment}-${var.vpc_name}-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
@@ -207,7 +228,7 @@ resource "aws_db_subnet_group" "main" {
   }
 }
 
-# RDS Parameter Group
+# RDS Parameter Group — unchanged
 resource "aws_db_parameter_group" "main" {
   name   = "${var.environment}-${var.vpc_name}-db-pg"
   family = var.db_parameter_group_family
@@ -217,7 +238,7 @@ resource "aws_db_parameter_group" "main" {
   }
 }
 
-# RDS Instance
+# RDS Instance — unchanged
 resource "aws_db_instance" "main" {
   identifier             = var.db_identifier
   engine                 = var.db_engine
@@ -239,21 +260,17 @@ resource "aws_db_instance" "main" {
   }
 }
 
-# IAM Role for EC2
+# IAM Role for EC2 — unchanged
 resource "aws_iam_role" "ec2_role" {
   name = "${var.environment}-${var.vpc_name}-ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
   })
 
   tags = {
@@ -261,24 +278,17 @@ resource "aws_iam_role" "ec2_role" {
   }
 }
 
-# IAM Policy — least privilege S3 access scoped to the syllabus bucket
 resource "aws_iam_policy" "s3_access" {
   name        = "${var.environment}-${var.vpc_name}-s3-access"
   description = "Allow EC2 to put, get, and delete objects in the syllabus bucket"
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:DeleteObject"
-        ]
-        Resource = "${aws_s3_bucket.syllabus.arn}/*"
-      }
-    ]
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+      Resource = "${aws_s3_bucket.syllabus.arn}/*"
+    }]
   })
 }
 
@@ -287,7 +297,6 @@ resource "aws_iam_role_policy_attachment" "s3_access" {
   policy_arn = aws_iam_policy.s3_access.arn
 }
 
-# IAM Policy — CloudWatch Agent (logs + metrics)
 resource "aws_iam_policy" "cloudwatch_agent" {
   name        = "${var.environment}-${var.vpc_name}-cloudwatch-agent"
   description = "Allow EC2 to publish logs and metrics to CloudWatch"
@@ -323,69 +332,215 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
   policy_arn = aws_iam_policy.cloudwatch_agent.arn
 }
 
-# IAM Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${var.environment}-${var.vpc_name}-ec2-profile"
   role = aws_iam_role.ec2_role.name
 }
 
-# EC2 Instance
-resource "aws_instance" "application" {
-  ami                         = var.ami_id
-  instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.public[0].id
-  vpc_security_group_ids      = [aws_security_group.application.id]
-  associate_public_ip_address = true
-  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
+# ── Launch Template ────────────────────────────────────────────────────────────
+# Replaces aws_instance.application. Same AMI, userdata, IAM profile — but now
+# used as the blueprint for ASG-managed instances.
+resource "aws_launch_template" "app" {
+  name          = "csye6225_asg"
+  image_id      = var.ami_id
+  instance_type = var.instance_type
+  key_name      = var.key_name
 
-  root_block_device {
-    volume_size           = 25
-    volume_type           = "gp2"
-    delete_on_termination = true
+  network_interfaces {
+    associate_public_ip_address = true
+    security_groups             = [aws_security_group.application.id]
   }
 
-  disable_api_termination = false
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_profile.name
+  }
 
-  user_data = <<-EOF
-    #!/bin/bash
-    # Write application environment file
-    cat > /opt/csye6225/.env <<ENVFILE
-    DATABASE_HOST=${aws_db_instance.main.address}
-    DATABASE_PORT=${aws_db_instance.main.port}
-    DATABASE_NAME=${var.db_name}
-    DATABASE_USER=${var.db_username}
-    DATABASE_PASSWORD=${var.db_password}
-    S3_BUCKET_NAME=${aws_s3_bucket.syllabus.bucket}
-    APP_HOST=0.0.0.0
-    APP_PORT=${var.application_port}
-    ENVFILE
+  block_device_mappings {
+    device_name = "/dev/sda1"
 
-    chown csye6225:csye6225 /opt/csye6225/.env
-    chmod 600 /opt/csye6225/.env
+    ebs {
+      volume_size           = 25
+      volume_type           = "gp2"
+      delete_on_termination = true
+    }
+  }
 
-    # Start CloudWatch agent with config baked into AMI
-    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-      -a fetch-config \
-      -m ec2 \
-      -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
-      -s
+  user_data = base64encode(<<-EOF
+#!/bin/bash
+cat > /opt/csye6225/.env <<ENVFILE
+DATABASE_HOST=${aws_db_instance.main.address}
+DATABASE_PORT=${aws_db_instance.main.port}
+DATABASE_NAME=${var.db_name}
+DATABASE_USER=${var.db_username}
+DATABASE_PASSWORD=${var.db_password}
+S3_BUCKET_NAME=${aws_s3_bucket.syllabus.bucket}
+APP_HOST=0.0.0.0
+APP_PORT=${var.application_port}
+ENVFILE
 
-    systemctl daemon-reload
-    systemctl restart csye6225.service
-  EOF
+chown csye6225:csye6225 /opt/csye6225/.env
+chmod 600 /opt/csye6225/.env
+
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config \
+  -m ec2 \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+  -s
+
+systemctl daemon-reload
+systemctl restart csye6225.service
+EOF
+  )
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "${var.environment}-${var.vpc_name}-asg-instance"
+    }
+  }
 
   depends_on = [aws_db_instance.main]
+}
+
+# ── Target Group ───────────────────────────────────────────────────────────────
+resource "aws_lb_target_group" "app" {
+  name     = "${var.environment}-app-tg"
+  port     = var.application_port
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+
+  health_check {
+    path                = "/healthz"
+    protocol            = "HTTP"
+    port                = var.application_port
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    interval            = 30
+    timeout             = 5
+    matcher             = "200"
+  }
 
   tags = {
-    Name = "${var.environment}-${var.vpc_name}-application"
+    Name = "${var.environment}-${var.vpc_name}-app-tg"
   }
 }
 
-# Route 53 A record — points subdomain to the EC2 instance public IP
+# ── Application Load Balancer ──────────────────────────────────────────────────
+resource "aws_lb" "app" {
+  name               = "${var.environment}-app-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.load_balancer.id]
+  subnets            = aws_subnet.public[*].id
+
+  tags = {
+    Name = "${var.environment}-${var.vpc_name}-alb"
+  }
+}
+
+# ── ALB Listener ───────────────────────────────────────────────────────────────
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
+# ── Auto Scaling Group ─────────────────────────────────────────────────────────
+resource "aws_autoscaling_group" "app" {
+  name                = "csye6225_asg"
+  min_size            = 3
+  max_size            = 5
+  desired_capacity    = 3
+  default_cooldown    = 60
+  vpc_zone_identifier = aws_subnet.public[*].id
+  target_group_arns   = [aws_lb_target_group.app.arn]
+
+  launch_template {
+    id      = aws_launch_template.app.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "${var.environment}-${var.vpc_name}-asg-instance"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Environment"
+    value               = var.environment
+    propagate_at_launch = true
+  }
+}
+
+# ── Auto Scaling Policies ──────────────────────────────────────────────────────
+
+resource "aws_autoscaling_policy" "scale_up" {
+  name                   = "${var.environment}-scale-up"
+  autoscaling_group_name = aws_autoscaling_group.app.name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = 1
+  cooldown               = 60
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+  alarm_name          = "${var.environment}-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 5
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app.name
+  }
+
+  alarm_actions = [aws_autoscaling_policy.scale_up.arn]
+}
+
+resource "aws_autoscaling_policy" "scale_down" {
+  name                   = "${var.environment}-scale-down"
+  autoscaling_group_name = aws_autoscaling_group.app.name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = -1
+  cooldown               = 60
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_low" {
+  alarm_name          = "${var.environment}-cpu-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 3
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app.name
+  }
+
+  alarm_actions = [aws_autoscaling_policy.scale_down.arn]
+}
+
+# ── Route 53 A Record (ALB Alias) ──────────────────────────────────────────────
+# Changed from static IP record to alias — aliases have no TTL,
+# Route 53 resolves directly to the ALB's current IPs.
 resource "aws_route53_record" "app" {
   zone_id = var.route53_zone_id
   name    = var.domain_name
   type    = "A"
-  ttl     = 60
-  records = [aws_instance.application.public_ip]
+
+  alias {
+    name                   = aws_lb.app.dns_name
+    zone_id                = aws_lb.app.zone_id
+    evaluate_target_health = true
+  }
 }
