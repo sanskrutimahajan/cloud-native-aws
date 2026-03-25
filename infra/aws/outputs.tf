@@ -43,14 +43,14 @@ output "database_security_group_id" {
   value       = aws_security_group.database.id
 }
 
-output "instance_id" {
-  description = "ID of the EC2 instance"
-  value       = aws_instance.application.id
+output "load_balancer_security_group_id" {
+  description = "ID of the load balancer security group"
+  value       = aws_security_group.load_balancer.id
 }
 
-output "instance_public_ip" {
-  description = "Public IP of the EC2 instance"
-  value       = aws_instance.application.public_ip
+output "alb_dns_name" {
+  description = "DNS name of the application load balancer"
+  value       = aws_lb.app.dns_name
 }
 
 output "s3_bucket_name" {
@@ -79,6 +79,6 @@ output "iam_instance_profile_name" {
 }
 
 output "application_url" {
-  description = "Application URL via domain name"
-  value       = "http://${var.domain_name}:${var.application_port}/"
+  description = "Application URL via load balancer and domain name"
+  value       = "http://${var.domain_name}/"
 }
