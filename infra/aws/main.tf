@@ -374,6 +374,7 @@ DATABASE_NAME=${var.db_name}
 DATABASE_USER=${var.db_username}
 DATABASE_PASSWORD=${var.db_password}
 S3_BUCKET_NAME=${aws_s3_bucket.syllabus.bucket}
+SNS_TOPIC_ARN=${aws_sns_topic.user_verification.arn}
 APP_HOST=0.0.0.0
 APP_PORT=${var.application_port}
 ENVFILE
