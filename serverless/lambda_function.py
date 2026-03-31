@@ -70,7 +70,7 @@ def lambda_handler(event, context):
         # --- Build verification link ---
         base_url = os.environ["BASE_URL"].rstrip("/")
         verification_link = (
-            f"{base_url}/validateEmail"
+            f"{base_url}/v1/validateEmail"
             f"?email={urllib.parse.quote(email, safe='')}"
             f"&token={urllib.parse.quote(token, safe='')}"
         )
