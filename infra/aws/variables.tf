@@ -131,3 +131,19 @@ variable "domain_name" {
   description = "Fully qualified domain name for the application (e.g., dev.sansmah.me)"
   type        = string
 }
+
+variable "lambda_zip_path" {
+  description = "Local path to the Lambda deployment zip file"
+  type        = string
+}
+
+variable "sendgrid_api_key" {
+  description = "SendGrid API key for sending verification emails"
+  type        = string
+  sensitive   = true
+}
+
+variable "from_email" {
+  description = "Verified sender email address for SendGrid"
+  type        = string
+}

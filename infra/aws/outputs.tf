@@ -82,3 +82,18 @@ output "application_url" {
   description = "Application URL via load balancer and domain name"
   value       = "http://${var.domain_name}/"
 }
+
+output "sns_topic_arn" {
+  description = "ARN of the user verification SNS topic"
+  value       = aws_sns_topic.user_verification.arn
+}
+
+output "dynamodb_table_name" {
+  description = "Name of the DynamoDB email tokens table"
+  value       = aws_dynamodb_table.email_tokens.name
+}
+
+output "lambda_function_name" {
+  description = "Name of the email verification Lambda function"
+  value       = aws_lambda_function.email_verification.function_name
+}
