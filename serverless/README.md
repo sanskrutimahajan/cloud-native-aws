@@ -1,9 +1,9 @@
 # Serverless — Email Verification Lambda
 
-AWS Lambda function that listens on an SNS topic and sends account verification emails to newly registered users. Duplicate sends are prevented by tracking sent emails in DynamoDB.
+AWS Lambda function triggered by an SNS notification to send account verification emails to newly registered users. Duplicate emails are prevented by tracking sent emails in DynamoDB.
 
 ```
-EC2 Web App ──publishes──► SNS Topic ──triggers──► Lambda ──sends email──► Mailgun
+EC2 Web App ──publishes──► SNS Topic ──triggers──► Lambda ──sends email──► SendGrid
                                                        │
                                                        └──records──► DynamoDB
 ```
@@ -12,25 +12,12 @@ EC2 Web App ──publishes──► SNS Topic ──triggers──► Lambda �
 
 ## Prerequisites
 
-To build and deploy this project locally you need:
-
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Python | 3.12+ | Local development and matching the Lambda runtime |
-| pip | latest | Installing Python dependencies |
-| Terraform | ≥ 1.5 | Provisioning AWS infrastructure |
-| AWS CLI | ≥ 2.x | Authenticating with AWS |
-| zip | any | Creating the Lambda deployment package |
-| Mailgun account | — | Sending transactional email (free tier sufficient) |
-
-**AWS credentials** must be configured before running Terraform:
-
-```bash
-aws configure
-# or export AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN
-```
-
-**Mailgun** — create an account at https://app.mailgun.com, add a sending domain, and obtain your API key from the dashboard.
+| Tool | Purpose |
+|------|---------|
+| Python 3.12+ | Matching the Lambda runtime |
+| pip | Installing dependencies |
+| AWS CLI | Deploying the Lambda function |
+| SendGrid account | Sending transactional email (free tier sufficient) |
 
 ---
 
@@ -38,122 +25,68 @@ aws configure
 
 ```
 .
-├── lambda/
-│   └── index.py              # Lambda handler (entry point: index.handler)
-├── terraform/
-│   ├── providers.tf          # Terraform and provider version constraints
-│   ├── variables.tf          # All input variable declarations
-│   ├── iam.tf                # IAM roles and policies (Lambda + EC2)
-│   ├── dynamodb.tf           # DynamoDB table for email deduplication
-│   ├── sns.tf                # SNS topic, subscription, and Lambda permission
-│   ├── lambda.tf             # Lambda function resource
-│   ├── outputs.tf            # Output values (SNS ARN, instance profile, etc.)
-│   └── terraform.tfvars.example  # Template for required variable values
-├── requirements.txt          # Python dependencies for local development
+├── lambda_function.py    # Lambda handler (entry point: lambda_function.lambda_handler)
+├── requirements.txt      # Runtime dependencies
+├── .gitignore
 └── README.md
 ```
 
 ---
 
-## Build Instructions
+## Build & Deploy Instructions
 
-The Lambda function uses only the Python standard library and `boto3`, which is pre-installed in the AWS Lambda runtime. No dependency packaging step is required.
-
-If you add new third-party packages in the future, install them into the `lambda/` directory before running `terraform apply`:
+### 1. Install dependencies into the package directory
 
 ```bash
-pip install <package> -t lambda/
+pip install -r requirements.txt -t package/
+cp lambda_function.py package/
 ```
 
-Terraform automatically creates `lambda_package.zip` from the `lambda/` directory when you run `terraform apply`. You do not need to zip anything manually.
-
----
-
-## Deploy Instructions
-
-### 1. Configure variables
+### 2. Create the deployment zip
 
 ```bash
-cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+cd package && zip -r ../lambda_package.zip . && cd ..
 ```
 
-Edit `terraform/terraform.tfvars` and fill in all placeholder values:
-
-| Variable | Description |
-|----------|-------------|
-| `aws_region` | AWS region to deploy into (e.g. `us-east-1`) |
-| `base_url` | Base URL of your web application (e.g. `http://your-ec2-ip`) |
-| `mailgun_api_key` | Your Mailgun private API key |
-| `mailgun_domain` | Your Mailgun sending domain (e.g. `mg.yourdomain.com`) |
-| `email_sender` | From address for verification emails |
-
-> **Never commit `terraform.tfvars`** — it contains secrets and is excluded by `.gitignore`.
-
-### 2. Initialize Terraform
+### 3. Deploy to AWS Lambda
 
 ```bash
-cd terraform
-terraform init
+aws lambda update-function-code \
+  --function-name email-verification \
+  --zip-file fileb://lambda_package.zip
 ```
 
-### 3. Review the plan
+Or on first deploy, create the function via the AWS Console or Terraform in your `tf-aws` infrastructure repo.
+
+### 4. Set environment variables on the Lambda function
 
 ```bash
-terraform plan
-```
-
-### 4. Apply
-
-```bash
-terraform apply
-```
-
-Type `yes` when prompted. After a successful apply, Terraform prints key output values:
-
-```
-sns_topic_arn              = "arn:aws:sns:us-east-1:123456789:user-registration"
-ec2_instance_profile_name  = "ec2-webapp-instance-profile"
-dynamodb_table_name        = "email-tracking"
-lambda_function_name       = "email-verification"
-```
-
-### 5. Wire up the web application
-
-Set the following environment variable in your web application so it can publish to SNS:
-
-```
-SNS_TOPIC_ARN=<value of sns_topic_arn output>
-```
-
-Attach the EC2 instance profile printed in `ec2_instance_profile_name` to your EC2 instance so the web app has permission to publish to SNS without hardcoded credentials.
-
----
-
-## Teardown
-
-```bash
-cd terraform
-terraform destroy
+aws lambda update-function-configuration \
+  --function-name email-verification \
+  --environment "Variables={
+    DYNAMODB_TABLE=email-tracking,
+    BASE_URL=http://your-ec2-url,
+    SENDGRID_API_KEY=your-sendgrid-api-key,
+    FROM_EMAIL=noreply@yourdomain.com
+  }"
 ```
 
 ---
 
-## Environment Variables Reference (Lambda)
+## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DYNAMODB_TABLE` | Yes | DynamoDB table name for tracking sent emails |
 | `BASE_URL` | Yes | Web app base URL used to build the verification link |
-| `MAILGUN_API_KEY` | Yes | Mailgun private API key |
-| `MAILGUN_DOMAIN` | Yes | Mailgun sending domain |
-| `EMAIL_SENDER` | No | From address (defaults to `noreply@<MAILGUN_DOMAIN>`) |
-| `LOG_LEVEL` | No | Logging verbosity — `DEBUG`, `INFO`, `WARNING`, `ERROR` (default: `INFO`) |
+| `SENDGRID_API_KEY` | Yes | SendGrid API key |
+| `FROM_EMAIL` | Yes | Sender email address (must be verified in SendGrid) |
 
 ---
 
 ## SNS Message Format
 
-The web application must publish a JSON message to the SNS topic in this format:
+The web application publishes a JSON message to the SNS topic when a new user registers:
 
 ```json
 {
@@ -163,23 +96,16 @@ The web application must publish a JSON message to the SNS topic in this format:
 }
 ```
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `email` | Yes | User's email address — also the DynamoDB partition key |
-| `first_name` | No | Used to personalise the greeting |
-| `token` | Yes | UUID generated by the web app and stored in its database |
-
-The verification link sent to the user will be:
+The verification link sent to the user:
 
 ```
-<BASE_URL>/validateEmail?email=<email>&token=<token>
+http://<BASE_URL>/validateEmail?email=user%40example.com&token=<UUID>
 ```
 
 ---
 
-## How Duplicate Prevention Works
+## Duplicate Prevention
 
-1. On every invocation, the Lambda checks DynamoDB for an existing item with `email` as the key.
-2. If an item is found, the email has already been sent — the function logs the skip and exits cleanly.
-3. Only after a successful Mailgun API call does the function write the item to DynamoDB.
-4. Because the check happens before the send, SNS retries on transient failures are safe.
+1. On each invocation the Lambda queries DynamoDB for the user's email.
+2. If a record exists, the email was already sent — the function skips without sending.
+3. DynamoDB is written **only after** a successful SendGrid API call, so SNS retries on failure are safe.
