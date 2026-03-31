@@ -31,6 +31,10 @@ class User(Base):
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
 
+    email_verified = Column(Boolean, nullable=False, default=False)
+    verification_token = Column(String(255), nullable=True)
+    token_expiry = Column(DateTime(timezone=True), nullable=True)
+
     account_created = Column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     account_updated = Column(
         DateTime(timezone=True),

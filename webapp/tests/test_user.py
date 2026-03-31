@@ -481,8 +481,8 @@ class TestUpdateUserNegative:
 
 class TestAuthenticationIntegration:
 
-    # Test complete flow: create user then authenticate and retrieve data
-    def test_successful_registration_and_login(self, client, auth_headers):
+    # Test complete flow: create user, verify email, authenticate and retrieve data
+    def test_successful_registration_and_login(self, client, auth_headers, db_session):
         payload = {
             "first_name": "Auth",
             "last_name": "Test",
@@ -491,6 +491,11 @@ class TestAuthenticationIntegration:
         }
         create_resp = client.post("/v1/user", json=payload)
         assert create_resp.status_code == 201
+
+        # Verify email using the token stored in DB
+        user = db_session.query(User).filter(User.username == "authtest@example.com").first()
+        verify_resp = client.get(f"/v1/validateEmail?email=authtest@example.com&token={user.verification_token}")
+        assert verify_resp.status_code == 200
 
         headers = auth_headers("authtest@example.com", "password123")
         get_resp = client.get("/v1/user/self", headers=headers)
@@ -643,7 +648,7 @@ class TestUnicodeAndSpecialCharacters:
         assert response.json()["last_name"] == last_name
 
     # Test passwords with special characters work correctly
-    def test_special_chars_in_password(self, client, auth_headers):
+    def test_special_chars_in_password(self, client, auth_headers, db_session):
         payload = {
             "first_name": "Special",
             "last_name": "Pass",
@@ -652,6 +657,9 @@ class TestUnicodeAndSpecialCharacters:
         }
         response = client.post("/v1/user", json=payload)
         assert response.status_code == 201
+
+        user = db_session.query(User).filter(User.username == "specialpass@example.com").first()
+        client.get(f"/v1/validateEmail?email=specialpass@example.com&token={user.verification_token}")
 
         headers = auth_headers("specialpass@example.com", "P@$$w0rd!#%^&*()")
         get_resp = client.get("/v1/user/self", headers=headers)
@@ -775,7 +783,7 @@ class TestConcurrencyAndPerformance:
 class TestDataIntegrity:
 
     # Test created user data persists and can be retrieved
-    def test_created_user_data_persists(self, client, auth_headers):
+    def test_created_user_data_persists(self, client, auth_headers, db_session):
         payload = {
             "first_name": "Persist",
             "last_name": "Test",
@@ -784,6 +792,9 @@ class TestDataIntegrity:
         }
         create_resp = client.post("/v1/user", json=payload)
         assert create_resp.status_code == 201
+
+        user = db_session.query(User).filter(User.username == "persist@example.com").first()
+        client.get(f"/v1/validateEmail?email=persist@example.com&token={user.verification_token}")
 
         headers = auth_headers("persist@example.com", "password123")
         get_resp = client.get("/v1/user/self", headers=headers)
