@@ -82,10 +82,10 @@ resource "aws_iam_role_policy_attachment" "lambda_policy" {
 
 # ── Lambda Function ────────────────────────────────────────────────────────────
 resource "aws_lambda_function" "email_verification" {
-  function_name = "${var.environment}-email-verification"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
+  function_name    = "${var.environment}-email-verification"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "lambda_function.lambda_handler"
+  runtime          = "python3.12"
   filename         = var.lambda_zip_path
   source_code_hash = filebase64sha256(var.lambda_zip_path)
   timeout          = 30
