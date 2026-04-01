@@ -41,4 +41,11 @@ def get_current_user(credentials: HTTPBasicCredentials = Depends(security), db: 
             headers={"WWW-Authenticate": "Basic realm=\"Access to course catalog\""}
         )
 
+    if not user.email_verified:
+        raise APIException(
+            error_type="Forbidden",
+            message="Email address has not been verified",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
     return user

@@ -2,8 +2,9 @@ import json
 import logging
 import os
 import re
+import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List
 
 from fastapi import Depends, FastAPI, File, Request, Response, UploadFile, status
@@ -29,6 +30,7 @@ from app.exceptions import (
 )
 from app import s3
 from app import metrics
+from app import sns
 
 # ──────────────────────────────────────────────
 # Logging configuration — writes to file + console
@@ -257,11 +259,16 @@ async def create_user(request: Request, response: Response, db: Session = Depend
             return conflict_error_response(request)
 
         try:
+            token = str(uuid.uuid4())
+            expiry = datetime.now(timezone.utc) + timedelta(minutes=1)
             user = User(
                 username=str(username),
                 password=hash_password(data["password"]),
                 first_name=data["first_name"],
                 last_name=data["last_name"],
+                email_verified=False,
+                verification_token=token,
+                token_expiry=expiry,
             )
             with metrics.Timer("db.user.insert.duration"):
                 db.add(user)
@@ -269,6 +276,7 @@ async def create_user(request: Request, response: Response, db: Session = Depend
                 db.refresh(user)
             response.headers["Location"] = "/v1/user/self"
             logger.info("User created successfully: %s", str(username))
+            sns.publish_verification_email(str(username), data["first_name"], token)
             return user
         except IntegrityError:
             db.rollback()
@@ -348,6 +356,46 @@ async def update_user(
             db.rollback()
             logger.error("Database error updating user: %s", e, exc_info=True)
             return validation_error_response(request, "Failed to update user")
+
+
+@app.get("/v1/validateEmail")
+async def validate_email(request: Request, db: Session = Depends(get_db)):
+    email = request.query_params.get("email")
+    token = request.query_params.get("token")
+
+    if not email or not token:
+        return bad_request_response(request, "Missing required query parameters: email and token")
+
+    user = db.query(User).filter(func.lower(User.username) == email.lower()).first()
+    if not user:
+        logger.warning("Email validation failed: no user found for email %s", email)
+        return bad_request_response(request, "Invalid or expired verification link")
+
+    if user.email_verified:
+        logger.info("Email already verified for: %s", email)
+        return JSONResponse(content={"message": "Email already verified"}, headers=CACHE_HEADERS)
+
+    now = datetime.now(timezone.utc)
+    expiry = user.token_expiry
+    if expiry is not None and expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=timezone.utc)
+
+    if user.verification_token != token or expiry is None or now > expiry:
+        logger.warning("Email validation failed: invalid or expired token for %s", email)
+        return bad_request_response(request, "Invalid or expired verification link")
+
+    user.email_verified = True
+    user.verification_token = None
+    user.token_expiry = None
+    try:
+        db.commit()
+        logger.info("Email verified successfully for: %s", email)
+        return JSONResponse(content={"message": "Email verified successfully"}, headers=CACHE_HEADERS)
+    except Exception as e:
+        db.rollback()
+        logger.error("Error verifying email for %s: %s", email, e, exc_info=True)
+        return create_error_response(request, "Internal Error", "Failed to verify email",
+                                     status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ──────────────────────────────────────────────

@@ -23,6 +23,9 @@ class Settings:
     # S3 settings (injected via EC2 user data)
     S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "")
 
+    # SNS settings
+    SNS_TOPIC_ARN: str = os.getenv("SNS_TOPIC_ARN", "")
+
     @property
     def DATABASE_URL(self) -> str:
         return f"postgresql://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"

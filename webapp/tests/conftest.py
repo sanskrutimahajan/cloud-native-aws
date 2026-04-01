@@ -70,10 +70,11 @@ def client(db_session):
 
     app.dependency_overrides[get_db] = override_get_db
 
-    # Mock S3 operations so tests don't need real AWS credentials
+    # Mock S3, SNS, and metrics so tests don't need real AWS credentials
     with patch("app.s3.get_s3_client") as mock_client, \
          patch("app.s3.get_bucket_name", return_value="test-bucket-uuid"), \
-         patch("app.metrics._client"):
+         patch("app.metrics._client"), \
+         patch("app.sns.publish_verification_email", return_value=True):
         mock_s3 = MagicMock()
         mock_client.return_value = mock_s3
         with TestClient(app) as c:
@@ -95,7 +96,8 @@ def create_test_user(db_session):
             username=username,
             password=hash_password(password),
             first_name=first_name,
-            last_name=last_name
+            last_name=last_name,
+            email_verified=True,
         )
         db_session.add(user)
         db_session.flush()

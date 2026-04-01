@@ -21,6 +21,7 @@ class UserResponse(BaseModel):
     username: EmailStr
     first_name: str
     last_name: str
+    email_verified: bool
     account_created: datetime
     account_updated: datetime
 
