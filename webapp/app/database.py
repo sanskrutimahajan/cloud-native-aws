@@ -37,6 +37,23 @@ def init_db():
     try:
         from app.models import Course, HealthCheck, Syllabus, User
         Base.metadata.create_all(bind=engine)
-        logger.info("Database tables created successfully")
+        _migrate()
+        logger.info("Database tables created/migrated successfully")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}", exc_info=True)
+
+
+def _migrate():
+    """Add any missing columns to existing tables (safe to run on every startup)."""
+    from sqlalchemy import text
+    migrations = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS token_expiry TIMESTAMPTZ",
+    ]
+    with engine.begin() as conn:
+        for stmt in migrations:
+            try:
+                conn.execute(text(stmt))
+            except Exception as e:
+                logger.warning(f"Migration skipped: {e}")
