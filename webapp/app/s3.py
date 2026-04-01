@@ -5,6 +5,7 @@ The bucket name is injected via environment variable from EC2 user data.
 """
 
 import logging
+import os
 import uuid
 
 import boto3
@@ -20,7 +21,7 @@ _s3_client = None
 def get_s3_client():
     global _s3_client
     if _s3_client is None:
-        _s3_client = boto3.client("s3")
+        _s3_client = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-1"))
     return _s3_client
 
 
