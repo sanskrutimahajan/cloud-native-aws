@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 
 import boto3
 from botocore.exceptions import ClientError
@@ -20,7 +21,7 @@ def publish_verification_email(email: str, first_name: str, token: str) -> bool:
 
     message = json.dumps({"email": email, "first_name": first_name, "token": token})
     try:
-        client = boto3.client("sns")
+        client = boto3.client("sns", region_name=os.environ.get("AWS_REGION", "us-east-1"))
         client.publish(TopicArn=topic_arn, Message=message)
         logger.info("Published verification email event to SNS for: %s", email)
         return True
