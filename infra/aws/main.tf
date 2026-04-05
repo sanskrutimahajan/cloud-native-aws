@@ -125,14 +125,6 @@ resource "aws_security_group" "application" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
     description     = "Application port from load balancer only"
     from_port       = var.application_port
     to_port         = var.application_port
@@ -197,8 +189,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "syllabus" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.s3.arn
     }
+    bucket_key_enabled = true
   }
 }
 
@@ -247,7 +241,9 @@ resource "aws_db_instance" "main" {
   allocated_storage      = 20
   db_name                = var.db_name
   username               = var.db_username
-  password               = var.db_password
+  password               = random_password.db_password.result
+  storage_encrypted      = true
+  kms_key_id             = aws_kms_key.rds.arn
   parameter_group_name   = aws_db_parameter_group.main.name
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.database.id]
@@ -284,11 +280,18 @@ resource "aws_iam_policy" "s3_access" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
-      Resource = "${aws_s3_bucket.syllabus.arn}/*"
-    }]
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+        Resource = "${aws_s3_bucket.syllabus.arn}/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
+        Resource = aws_kms_key.s3.arn
+      }
+    ]
   })
 }
 
@@ -332,6 +335,32 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
   policy_arn = aws_iam_policy.cloudwatch_agent.arn
 }
 
+resource "aws_iam_policy" "secrets_access" {
+  name        = "${var.environment}-${var.vpc_name}-secrets-access"
+  description = "Allow EC2 to read DB password from Secrets Manager and decrypt with KMS"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = aws_secretsmanager_secret.db_password.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = aws_kms_key.secrets.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "secrets_access" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = aws_iam_policy.secrets_access.arn
+}
+
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${var.environment}-${var.vpc_name}-ec2-profile"
   role = aws_iam_role.ec2_role.name
@@ -344,7 +373,6 @@ resource "aws_launch_template" "app" {
   name          = "csye6225_asg"
   image_id      = var.ami_id
   instance_type = var.instance_type
-  key_name      = var.key_name
 
   network_interfaces {
     associate_public_ip_address = true
@@ -362,17 +390,21 @@ resource "aws_launch_template" "app" {
       volume_size           = 25
       volume_type           = "gp2"
       delete_on_termination = true
+      encrypted             = true
+      kms_key_id            = aws_kms_key.ec2.arn
     }
   }
 
   user_data = base64encode(<<-EOF
 #!/bin/bash
+DB_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${aws_secretsmanager_secret.db_password.id} --query SecretString --output text --region ${var.aws_region})
+
 cat > /opt/csye6225/.env <<ENVFILE
 DATABASE_HOST=${aws_db_instance.main.address}
 DATABASE_PORT=${aws_db_instance.main.port}
 DATABASE_NAME=${var.db_name}
 DATABASE_USER=${var.db_username}
-DATABASE_PASSWORD=${var.db_password}
+DATABASE_PASSWORD=$DB_PASSWORD
 S3_BUCKET_NAME=${aws_s3_bucket.syllabus.bucket}
 SNS_TOPIC_ARN=${aws_sns_topic.user_verification.arn}
 APP_HOST=0.0.0.0

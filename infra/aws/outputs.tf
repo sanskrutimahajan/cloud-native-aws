@@ -97,3 +97,33 @@ output "lambda_function_name" {
   description = "Name of the email verification Lambda function"
   value       = aws_lambda_function.email_verification.function_name
 }
+
+output "kms_key_ec2_arn" {
+  description = "ARN of the EC2 KMS key"
+  value       = aws_kms_key.ec2.arn
+}
+
+output "kms_key_rds_arn" {
+  description = "ARN of the RDS KMS key"
+  value       = aws_kms_key.rds.arn
+}
+
+output "kms_key_s3_arn" {
+  description = "ARN of the S3 KMS key"
+  value       = aws_kms_key.s3.arn
+}
+
+output "kms_key_secrets_arn" {
+  description = "ARN of the Secrets Manager KMS key"
+  value       = aws_kms_key.secrets.arn
+}
+
+output "secret_arn_db_password" {
+  description = "ARN of the DB password secret in Secrets Manager"
+  value       = aws_secretsmanager_secret.db_password.arn
+}
+
+output "secret_arn_sendgrid_api_key" {
+  description = "ARN of the SendGrid API key secret in Secrets Manager"
+  value       = aws_secretsmanager_secret.sendgrid_api_key.arn
+}
