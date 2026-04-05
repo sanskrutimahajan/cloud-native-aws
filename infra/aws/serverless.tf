@@ -70,6 +70,16 @@ resource "aws_iam_policy" "lambda_policy" {
           "dynamodb:UpdateItem"
         ]
         Resource = aws_dynamodb_table.email_tokens.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = aws_secretsmanager_secret.sendgrid_api_key.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = aws_kms_key.secrets.arn
       }
     ]
   })
@@ -92,7 +102,7 @@ resource "aws_lambda_function" "email_verification" {
 
   environment {
     variables = {
-      SENDGRID_API_KEY = var.sendgrid_api_key
+      SENDGRID_API_KEY = aws_secretsmanager_secret_version.sendgrid_api_key.secret_string
       FROM_EMAIL       = var.from_email
       DYNAMODB_TABLE   = aws_dynamodb_table.email_tokens.name
       BASE_URL         = "http://${var.domain_name}"
