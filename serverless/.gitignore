@@ -21,6 +21,7 @@ dist/
 # IDE files
 .idea/
 .vscode/
+.eclipse/
 *.swp
 *.swo
 
@@ -30,6 +31,7 @@ Thumbs.db
 
 # Environment variables / secrets
 .env
+*.env
 *.env.local
 
 # pytest / testing
