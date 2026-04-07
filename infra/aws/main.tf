@@ -88,14 +88,6 @@ resource "aws_security_group" "load_balancer" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "HTTP from internet"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
     description = "HTTPS from internet"
     from_port   = 443
     to_port     = 443
@@ -472,10 +464,12 @@ resource "aws_lb" "app" {
 }
 
 # ── ALB Listener ───────────────────────────────────────────────────────────────
-resource "aws_lb_listener" "http" {
+resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.app.arn
-  port              = 80
-  protocol          = "HTTP"
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate_validation.app.certificate_arn
 
   default_action {
     type             = "forward"

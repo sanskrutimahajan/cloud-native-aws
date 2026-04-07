@@ -1,94 +1,126 @@
 # tf-infra
 
-Infrastructure as Code — Terraform configurations for AWS and GCP networking, compute, database, storage, IAM, CloudWatch observability, and DNS resources.
+Infrastructure as Code — Terraform configurations for AWS networking, compute, database, storage, IAM, KMS, Secrets Manager, serverless, CloudWatch observability, DNS, and SSL.
 
 ## Prerequisites
 
 - [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.0
 - [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) configured with `dev` and `demo` profiles
-- [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) configured with application default credentials
-- A custom AMI built via Packer with the CloudWatch Unified Agent installed and configured
+- A custom AMI built via Packer with the CloudWatch Unified Agent and application pre-installed
 
 ## Repository Structure
 
 ```
 tf-infra/
 ├── .github/workflows/
-│   └── terraform-ci.yml        # CI: fmt, init, validate for AWS & GCP
+│   └── terraform-ci.yml        # CI: fmt, init, validate on every PR
 ├── aws/
-│   ├── main.tf                 # VPC, subnets, security groups, S3, RDS, IAM, EC2, CloudWatch, Route 53
+│   ├── providers.tf            # AWS + random provider configuration
+│   ├── main.tf                 # VPC, subnets, security groups, S3, RDS, IAM, launch template, ALB, ASG, Route 53
+│   ├── serverless.tf           # SNS, DynamoDB, Lambda (email verification), EC2 SNS publish policy
+│   ├── kms.tf                  # 4 customer-managed KMS keys with 90-day rotation
+│   ├── secrets.tf              # Secrets Manager secrets for DB password and SendGrid API key
+│   ├── ssl.tf                  # ACM certificate with Route 53 DNS validation
 │   ├── variables.tf            # Input variable declarations
 │   ├── outputs.tf              # Output value declarations
-│   ├── providers.tf            # AWS provider configuration
 │   ├── dev.tfvars              # Dev environment values (gitignored)
 │   └── demo.tfvars             # Demo environment values (gitignored)
-└── gcp/
-    ├── main.tf                 # VPC, subnets, routes, firewall rules, Compute Engine instance
-    ├── variables.tf            # Input variable declarations
-    ├── outputs.tf              # Output value declarations
-    ├── providers.tf            # GCP provider configuration
-    ├── dev.tfvars              # Dev environment values (gitignored)
-    └── demo.tfvars             # Demo environment values (gitignored)
 ```
 
 ## What Gets Created
 
-### AWS Resources
-
-**Networking**
+### Networking
 - VPC with DNS support and hostnames enabled
-- 3 public subnets across 3 availability zones
-- 3 private subnets across 3 availability zones
-- Internet Gateway attached to the VPC
-- Public route table with internet route (0.0.0.0/0 → IGW)
-- Private route table
-- Application security group (ports 22, 80, 443, and app port open to internet)
-- Database security group (DB port accessible from application SG only)
+- 3 public subnets + 3 private subnets across 3 availability zones
+- Internet Gateway, public route table, private route table
+- **Load balancer security group** — HTTPS (443) inbound from internet only
+- **Application security group** — app port (8080) inbound from LB SG only; no SSH
+- **Database security group** — DB port (5432) inbound from application SG only
 
-**Storage**
-- S3 bucket (UUID-named) with server-side AES256 encryption, public access blocked, and 30-day lifecycle transition to STANDARD_IA
+### SSL / HTTPS
+- ACM certificate issued via DNS validation (works for both dev and demo — both use Route 53)
+- Route 53 CNAME record created automatically for DNS validation
+- ALB HTTPS listener on port 443 using `ELBSecurityPolicy-TLS13-1-2-2021-06`
+- Traffic from ALB → EC2 uses plain HTTP (internal only, not exposed)
 
-**Database**
-- RDS instance (PostgreSQL) in private subnets with a dedicated subnet group and parameter group
+### Storage
+- S3 bucket (UUID-named) encrypted with **SSE-KMS** using the S3 KMS key
+- Bucket key enabled to reduce KMS API calls
+- Public access fully blocked
+- 30-day lifecycle transition to STANDARD_IA
 
-**IAM**
-- EC2 IAM role with EC2 assume-role trust policy
-- IAM policy for least-privilege S3 access (PutObject, GetObject, DeleteObject on the app bucket)
-- IAM policy for CloudWatch Agent (PutMetricData, CreateLogGroup, CreateLogStream, PutLogEvents, DescribeLog*, ec2:Describe*, ssm:GetParameter for CloudWatch SSM params)
-- Both policies attached to the EC2 role
-- EC2 instance profile wrapping the role — **no AWS credentials are stored on the instance**
-- All IAM resources are destroyed when `terraform destroy` is run
+### Database
+- RDS PostgreSQL in private subnets with dedicated subnet group and parameter group
+- **Storage encrypted** with the RDS KMS key
+- Password **auto-generated** by Terraform (`random_password`) and stored in Secrets Manager
 
-**Compute**
-- EC2 instance in the first public subnet using a custom AMI (25GB gp2 root volume)
-- IAM instance profile attached for credential-free CloudWatch and S3 access
-- User data script that:
-  1. Writes `/opt/csye6225/.env` with DB, S3, and app configuration
-  2. Starts the CloudWatch Unified Agent using the config baked into the AMI
-  3. Restarts the application systemd service
+### KMS Keys (90-day rotation, customer-managed)
+| Key | Purpose |
+|-----|---------|
+| `<env>-ec2` | EBS volume encryption for ASG instances |
+| `<env>-rds` | RDS storage encryption |
+| `<env>-s3` | S3 bucket SSE-KMS encryption |
+| `<env>-secrets` | Secrets Manager secret encryption |
 
-**Observability**
-- CloudWatch Unified Agent activated on instance launch via userdata
-- Log group and stream created automatically by the agent on first launch
-- StatsD listener on `:8125` for custom application metrics
+### Secrets Manager
+| Secret | Contents |
+|--------|---------|
+| `<env>-db-password` | Auto-generated RDS password (16 chars, special chars) |
+| `<env>-sendgrid-api-key` | SendGrid API key for email verification Lambda |
 
-**DNS**
-- Route 53 A record pointing the environment subdomain (`dev.sansmah.me` / `demo.sansmah.me`) to the EC2 instance public IP
-- TTL: 60 seconds
+Both secrets encrypted with the `<env>-secrets` KMS key.
 
-### GCP Resources
-- VPC network with custom subnet mode
-- 3 public subnets across 3 zones
-- 3 private subnets across 3 zones with private Google access
-- Internet route (0.0.0.0/0 → default internet gateway)
-- Firewall rule allowing TCP on configured ports for tagged instances
-- Deny-all firewall rule at lower priority
-- Compute Engine instance in the first public subnet using a custom image (25GB pd-balanced)
-- IAM binding to share the image with the demo project (dev environment only)
+### IAM
+- **EC2 role** with:
+  - S3 access (PutObject, GetObject, DeleteObject) + KMS Decrypt/GenerateDataKey for S3 key
+  - CloudWatch Agent (PutMetricData, logs, ec2:Describe*, ssm:GetParameter)
+  - Secrets Manager GetSecretValue scoped to the DB password secret
+  - KMS Decrypt scoped to the Secrets Manager key
+  - SNS Publish scoped to the user verification topic
+- **Lambda role** with:
+  - CloudWatch Logs
+  - DynamoDB (PutItem, GetItem, UpdateItem) on the email tokens table
+  - Secrets Manager GetSecretValue scoped to the SendGrid API key secret
+  - KMS Decrypt scoped to the Secrets Manager key
+- EC2 instance profile wrapping the EC2 role — no credentials stored on instances
+
+### Compute (Auto Scaling)
+- Launch Template (`csye6225_asg`):
+  - Custom AMI, t2.micro
+  - EBS root volume (25GB gp2) **encrypted** with EC2 KMS key
+  - No SSH key pair — instances are not directly accessible
+  - User data fetches DB password from Secrets Manager at launch and writes `/opt/csye6225/.env`
+- Auto Scaling Group: min 3, max 5, desired 3 across public subnets
+- Scale-up policy: CPU > 5% for 2 periods → add 1 instance
+- Scale-down policy: CPU < 3% for 2 periods → remove 1 instance
+
+### Load Balancer
+- Application Load Balancer (internet-facing) across 3 public subnets
+- Target group on port 8080 (HTTP), health check on `/healthz`
+- HTTPS listener on port 443 with ACM certificate
+
+### Serverless (Email Verification)
+- SNS topic `<env>-user-verification` — EC2 publishes user registration events
+- DynamoDB table `<env>-email-tokens` — tracks verification tokens with TTL
+- Lambda function `<env>-email-verification` (Python 3.12):
+  - Triggered by SNS
+  - Reads SendGrid API key from Secrets Manager secret version (passed as env var)
+  - Sends verification email with a link containing the token
+  - Writes token to DynamoDB with expiry
+
+### DNS
+- Route 53 A record (alias) pointing `<env>.sansmah.me` to the ALB
+
+### Observability
+- CloudWatch Unified Agent started via user data on instance launch
+- Application logs shipped to CloudWatch Log Groups
+- Custom StatsD metrics on `:8125`
+
+---
 
 ## tfvars Setup
 
-`*.tfvars` files are gitignored (they contain DB credentials). Create them locally before deploying.
+`*.tfvars` files are gitignored (they contain secrets). Create them locally before deploying.
 
 ### dev.tfvars
 
@@ -111,89 +143,93 @@ instance_type = "t2.micro"
 db_identifier             = "csye6225"
 db_name                   = "csye6225"
 db_username               = "csye6225"
-db_password               = "<YOUR_DB_PASSWORD>"
 db_engine                 = "postgres"
 db_engine_version         = "16.3"
 db_parameter_group_family = "postgres16"
 db_instance_class         = "db.t3.micro"
 
-# Route 53 — get from: AWS Console → Route 53 → Hosted zones → dev.sansmah.me → Hosted zone ID
-route53_zone_id = "<HOSTED_ZONE_ID>"
+route53_zone_id = "<DEV_HOSTED_ZONE_ID>"
 domain_name     = "dev.sansmah.me"
+
+lambda_zip_path  = "../serverless/function.zip"
+sendgrid_api_key = "<SENDGRID_API_KEY>"
+from_email       = "noreply@dev.sansmah.me"
 ```
+
+> **Note:** `db_password` and `key_name` are no longer required. The DB password is auto-generated by Terraform and stored in Secrets Manager. SSH access to EC2 instances has been removed.
 
 ### demo.tfvars
 
 Same structure as above with:
-- `aws_profile = "demo"`
-- `environment = "demo"`
-- `vpc_cidr = "10.1.0.0/16"` (and matching subnet CIDRs)
-- `route53_zone_id` from the demo AWS account
+- `aws_profile = "demo"`, `environment = "demo"`
+- `vpc_cidr = "10.1.0.0/16"` (and matching subnet CIDRs `10.1.x.x`)
+- `route53_zone_id` from the **demo** AWS account
 - `domain_name = "demo.sansmah.me"`
+- `lambda_zip_path = "<path_to_lambda.zip>"`
 
-## DNS Setup (Manual — done once via AWS Console)
+---
 
-Before running Terraform, the following must be configured manually:
+## DNS Setup (Manual — done once)
+
+Before running Terraform for the first time:
 
 1. Register domain `sansmah.me` with a registrar (e.g., Namecheap)
-2. In the **root AWS account** → Route 53 → create a public hosted zone for `sansmah.me`
-3. Update the registrar's nameservers to the 4 NS values from the Route 53 hosted zone
-4. In the **dev AWS account** → Route 53 → create a public hosted zone for `dev.sansmah.me`
-5. In the **demo AWS account** → Route 53 → create a public hosted zone for `demo.sansmah.me`
-6. In the **root account** hosted zone for `sansmah.me`, add NS records delegating `dev.sansmah.me` and `demo.sansmah.me` to their respective hosted zone nameservers
+2. In the **root AWS account** → Route 53 → create public hosted zone for `sansmah.me`
+3. Update the registrar's nameservers to the 4 NS values from Route 53
+4. In the **dev AWS account** → Route 53 → create public hosted zone for `dev.sansmah.me`
+5. In the **demo AWS account** → Route 53 → create public hosted zone for `demo.sansmah.me`
+6. In the **root account** hosted zone, add NS delegation records for `dev.sansmah.me` and `demo.sansmah.me`
 
-After this one-time setup, Terraform manages the A record within each subdomain's hosted zone.
+After this one-time setup, Terraform manages all records within each subdomain's hosted zone.
+
+---
 
 ## AMI Requirements (built via Packer in the webapp repo)
 
-The AMI used by Terraform must have:
-- CloudWatch Unified Agent installed (`amazon-cloudwatch-agent.deb`)
-- CloudWatch agent config copied to `/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json`
-- `amazon-cloudwatch-agent` systemd service enabled (not started — userdata starts it)
-- Application installed at `/opt/csye6225/` with log output to `/var/log/webapp/`
-- `csye6225` systemd service enabled
+The AMI must have:
+- Application installed at `/opt/csye6225/` with `csye6225` systemd service enabled
+- CloudWatch Unified Agent installed at `/opt/aws/amazon-cloudwatch-agent/`
+- CloudWatch agent config at `/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json`
+- AWS CLI v2 installed (needed by user data to fetch secret from Secrets Manager)
+- `csye6225` user and group created
+- Log output to `/var/log/webapp/`
 
-Userdata starts both services at instance launch — no credentials are embedded in the AMI.
+User data writes `/opt/csye6225/.env` and starts both services — no credentials are embedded in the AMI.
 
-## Setup Instructions
+---
 
-### AWS
+## Deploy Instructions
 
 ```bash
 cd aws
 terraform init
 terraform fmt -recursive
 terraform validate
+
+# Dev
 terraform plan -var-file=dev.tfvars
 terraform apply -var-file=dev.tfvars
+
+# Demo
+terraform plan -var-file=demo.tfvars
+terraform apply -var-file=demo.tfvars
 ```
 
-After apply, verify:
+After apply:
 ```bash
-terraform output application_url   # prints http://dev.sansmah.me:8080/
+terraform output application_url   # https://dev.sansmah.me/
 ```
 
-### GCP
-
-```bash
-cd gcp
-terraform init
-terraform fmt -recursive
-terraform validate
-terraform plan -var-file=dev.tfvars
-terraform apply -var-file=dev.tfvars
-```
+---
 
 ## Multiple Environments with Workspaces
 
-Terraform workspaces keep dev and demo state files separate.
-
 ```bash
-# Deploy dev
+# Create and deploy dev
 terraform workspace new dev
 terraform apply -var-file=dev.tfvars
 
-# Deploy demo (separate state)
+# Create and deploy demo (separate state)
 terraform workspace new demo
 terraform apply -var-file=demo.tfvars
 
@@ -202,31 +238,62 @@ terraform workspace select dev
 terraform workspace select demo
 ```
 
-## Verifying CloudWatch (after deploy)
+---
 
-1. **Logs** — AWS Console → CloudWatch → Log groups → `/csye6225/dev` → confirm log stream exists and entries appear within ~1 minute of making API requests
-2. **Metrics** — AWS Console → CloudWatch → Metrics → Custom namespaces → `CSYE6225/dev` → confirm API call counts and timers appear
+## Importing an SSL Certificate (Demo Environment)
 
-## GCP Image Sharing
+For the demo environment, if you have purchased an SSL certificate from an external vendor (e.g., Namecheap), import it into ACM using the AWS CLI before running Terraform:
 
-When deploying in the dev environment, the custom GCP image is automatically shared with the demo project via the `demo_project` variable in `dev.tfvars`:
-
-```hcl
-demo_project = "sanskruti-demo"
+```bash
+aws acm import-certificate \
+  --certificate fileb://certificate.crt \
+  --private-key fileb://private.key \
+  --certificate-chain fileb://ca_bundle.crt \
+  --region us-east-1 \
+  --profile demo
 ```
 
-This grants the demo project's Cloud Services service account `roles/compute.imageUser` on the image.
+The command returns a certificate ARN. Reference it in your Terraform configuration as needed.
+
+---
+
+## Verifying After Deploy
+
+**HTTPS:**
+```bash
+curl -I https://dev.sansmah.me/healthz
+# Expected: HTTP/2 200
+```
+
+**Secrets Manager:**
+```bash
+aws secretsmanager get-secret-value \
+  --secret-id dev-db-password \
+  --profile dev --region us-east-1
+```
+
+**KMS Keys:**
+```bash
+aws kms list-aliases --profile dev --region us-east-1 | grep dev-
+```
+
+**CloudWatch Logs:**
+AWS Console → CloudWatch → Log groups → `/csye6225/dev`
+
+---
 
 ## Cleanup
 
 ```bash
-# Destroy dev
+# Dev
 terraform workspace select dev
 terraform destroy -var-file=dev.tfvars
 
-# Destroy demo
+# Demo
 terraform workspace select demo
 terraform destroy -var-file=demo.tfvars
 ```
 
-All IAM roles, policies, EC2 instances, RDS instances, S3 buckets, and Route 53 records are destroyed with the stack.
+All resources (VPC, RDS, S3, KMS keys, Secrets Manager secrets, Lambda, DynamoDB, ASG, ALB, ACM cert, Route 53 records, IAM) are destroyed with the stack.
+
+> **Note:** KMS keys have a 10-day deletion window after `terraform destroy`. They cannot be immediately deleted.
