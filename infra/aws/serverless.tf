@@ -105,7 +105,7 @@ resource "aws_lambda_function" "email_verification" {
       SENDGRID_API_KEY = aws_secretsmanager_secret_version.sendgrid_api_key.secret_string
       FROM_EMAIL       = var.from_email
       DYNAMODB_TABLE   = aws_dynamodb_table.email_tokens.name
-      BASE_URL         = "http://${var.domain_name}"
+      BASE_URL         = "https://${var.domain_name}"
     }
   }
 

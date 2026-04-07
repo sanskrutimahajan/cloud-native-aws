@@ -80,7 +80,7 @@ output "iam_instance_profile_name" {
 
 output "application_url" {
   description = "Application URL via load balancer and domain name"
-  value       = "http://${var.domain_name}/"
+  value       = "https://${var.domain_name}/"
 }
 
 output "sns_topic_arn" {
