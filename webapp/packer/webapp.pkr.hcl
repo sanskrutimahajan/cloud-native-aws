@@ -89,6 +89,13 @@ build {
     ]
   }
 
+  # Write AMI ID to manifest file (AWS only — consumed by CD pipeline)
+  post-processor "manifest" {
+    only       = ["amazon-ebs.webapp"]
+    output     = "manifest.json"
+    strip_path = true
+  }
+
   # Share GCP image with demo project
   post-processor "shell-local" {
     only = ["googlecompute.webapp"]
