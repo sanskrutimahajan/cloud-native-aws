@@ -4,10 +4,6 @@ packer {
       version = ">= 1.2.0"
       source  = "github.com/hashicorp/amazon"
     }
-    googlecompute = {
-      version = ">= 1.1.0"
-      source  = "github.com/hashicorp/googlecompute"
-    }
   }
 }
 
@@ -48,25 +44,9 @@ source "amazon-ebs" "webapp" {
   }
 }
 
-# GCP Image Builder
-source "googlecompute" "webapp" {
-  project_id              = var.gcp_project_id
-  zone                    = var.gcp_zone
-  machine_type            = var.gcp_machine_type
-  source_image_family     = "ubuntu-2404-lts-amd64"
-  source_image_project_id = ["ubuntu-os-cloud"]
-  image_name              = local.image_name
-  image_description       = "Custom image for CSYE 6225 web application"
-  image_family            = "csye6225-webapp"
-  ssh_username            = var.ssh_username
-  disk_size               = 25
-  disk_type               = "pd-balanced"
-}
-
 build {
   sources = [
     "source.amazon-ebs.webapp",
-    "source.googlecompute.webapp",
   ]
 
   # Upload application artifact
@@ -89,19 +69,9 @@ build {
     ]
   }
 
-  # Write AMI ID to manifest file (AWS only — consumed by CD pipeline)
+  # Write AMI ID to manifest file — consumed by CD pipeline
   post-processor "manifest" {
-    only       = ["amazon-ebs.webapp"]
     output     = "manifest.json"
     strip_path = true
-  }
-
-  # Share GCP image with demo project
-  post-processor "shell-local" {
-    only = ["googlecompute.webapp"]
-    inline = [
-      "DEMO_PROJECT_NUM=$(gcloud projects describe ${var.gcp_image_users[0]} --format='value(projectNumber)')",
-      "gcloud compute images add-iam-policy-binding ${local.image_name} --project=${var.gcp_project_id} --member=\"serviceAccount:$${DEMO_PROJECT_NUM}@cloudservices.gserviceaccount.com\" --role='roles/compute.imageUser'"
-    ]
   }
 }

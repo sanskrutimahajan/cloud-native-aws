@@ -14,27 +14,6 @@ variable "ami_users" {
   default     = ["822485195477"]
 }
 
-variable "gcp_project_id" {
-  type    = string
-  default = "sanskruti-dev"
-}
-
-variable "gcp_zone" {
-  type    = string
-  default = "us-central1-f"
-}
-
-variable "gcp_machine_type" {
-  type    = string
-  default = "e2-medium"
-}
-
-variable "gcp_image_users" {
-  type        = list(string)
-  description = "GCP project IDs to share the image with"
-  default     = ["sanskruti-demo"]
-}
-
 variable "source_ami_filter" {
   type    = string
   default = "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"
