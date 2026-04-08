@@ -21,7 +21,7 @@ variable "gcp_project_id" {
 
 variable "gcp_zone" {
   type    = string
-  default = "us-central1-a"
+  default = "us-central1-f"
 }
 
 variable "gcp_machine_type" {
