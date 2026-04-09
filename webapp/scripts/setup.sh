@@ -115,7 +115,17 @@ WantedBy=multi-user.target
 EOF
 
 # ============================================
-# 9. Install CloudWatch Agent
+# 9. Install AWS CLI
+# ============================================
+log "Installing AWS CLI v2..."
+curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install
+rm -rf /tmp/awscliv2.zip /tmp/aws
+log "AWS CLI installed successfully"
+
+# ============================================
+# 10. Install CloudWatch Agent
 # ============================================
 log "Downloading CloudWatch Unified Agent..."
 wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb \
@@ -126,7 +136,7 @@ rm -f /tmp/amazon-cloudwatch-agent.deb
 log "CloudWatch Agent installed successfully"
 
 # ============================================
-# 10. Copy CloudWatch Agent Configuration
+# 11. Copy CloudWatch Agent Configuration
 # ============================================
 log "Copying CloudWatch Agent configuration..."
 cp /opt/csye6225/cloudwatch-config.json \
@@ -134,7 +144,7 @@ cp /opt/csye6225/cloudwatch-config.json \
 log "CloudWatch Agent configuration copied"
 
 # ============================================
-# 11. Enable Services
+# 12. Enable Services
 # ============================================
 log "Reloading SystemD daemon..."
 systemctl daemon-reload
