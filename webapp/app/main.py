@@ -32,6 +32,7 @@ from app import s3
 from app import metrics
 from app import sns
 
+#This is main.py
 # ──────────────────────────────────────────────
 # Logging configuration — writes to file + console
 # ──────────────────────────────────────────────
