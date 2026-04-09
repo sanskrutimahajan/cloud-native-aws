@@ -91,6 +91,10 @@ jobs:
         working-directory: packer
         run: packer init .
 
+      - name: Validate Packer template
+        working-directory: packer
+        run: packer validate -var "app_zip_path=webapp.zip" .
+
       - name: Build images
         working-directory: packer
         run: packer build -var "app_zip_path=webapp.zip" .
