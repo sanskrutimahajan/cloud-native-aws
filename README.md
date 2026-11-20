@@ -13,11 +13,11 @@ An end-to-end cloud-native system built for **CSYE 6225 — Network Structures &
 
 ## At a glance
 
-- 🏗️ **Immutable Packer AMIs:** every release is baked into a fresh Ubuntu 24.04 AMI with Packer and rolled out by an Auto Scaling **instance refresh**, with zero downtime and no patching in place.
-- ⚖️ **Multi-AZ Auto Scaling:** EC2 instances spread across **three availability zones** behind an HTTPS Application Load Balancer. Scaling runs between 3 and 5 instances based on CPU alarms, and ALB health checks on `/healthz` send traffic only to healthy instances.
-- 🔐 **KMS everywhere:** four customer-managed **KMS keys with automatic rotation** encrypt EBS volumes, RDS, S3, and Secrets Manager. Add least-privilege IAM, no SSH, no static AWS keys on hosts, and TLS 1.3.
-- ⚡ **Event-driven Lambda:** user sign-ups publish to **SNS**, which triggers a **Lambda** that sends a verification email through SendGrid and uses **DynamoDB** to prevent duplicate emails, even when SNS retries.
-- 🔄 **Everything as code:** **Terraform** provisions the entire AWS environment, and **GitHub Actions** tests, validates, builds, and deploys it.
+- **Immutable Packer AMIs:** every release is baked into a fresh Ubuntu 24.04 AMI with Packer and rolled out by an Auto Scaling **instance refresh**, with zero downtime and no patching in place.
+- **Multi-AZ Auto Scaling:** EC2 instances spread across **three availability zones** behind an HTTPS Application Load Balancer. Scaling runs between 3 and 5 instances based on CPU alarms, and ALB health checks on `/healthz` send traffic only to healthy instances.
+- **KMS everywhere:** four customer-managed **KMS keys with automatic rotation** encrypt EBS volumes, RDS, S3, and Secrets Manager. Add least-privilege IAM, no SSH, no static AWS keys on hosts, and TLS 1.3.
+- **Event-driven Lambda:** user sign-ups publish to **SNS**, which triggers a **Lambda** that sends a verification email through SendGrid and uses **DynamoDB** to prevent duplicate emails, even when SNS retries.
+- **Everything as code:** **Terraform** provisions the entire AWS environment, and **GitHub Actions** tests, validates, builds, and deploys it.
 
 This monorepo combines three repositories that were originally developed separately. Each one keeps its **full commit history** in its own folder.
 
