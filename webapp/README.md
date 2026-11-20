@@ -84,8 +84,8 @@ S3_BUCKET_NAME=<bucket-uuid>
 
 ### 1. Clone the repository
 ```bash
-git clone git@github.com:YOUR_USERNAME/webapp_fork.git
-cd webapp_fork
+git clone https://github.com/sanskrutimahajan/cloud-native-aws.git
+cd cloud-native-aws/webapp
 ```
 
 ### 2. Create and activate a virtual environment
@@ -105,7 +105,7 @@ createdb webapp_db
 ```
 
 ### 5. Configure environment variables
-Create a `.env` file in the project root (this file is gitignored and must never be committed):
+Create a `.env` file in the `webapp/` folder (this file is gitignored and must never be committed):
 ```
 DATABASE_HOST=localhost
 DATABASE_PORT=5432
@@ -208,21 +208,21 @@ The CloudWatch Agent must be started by EC2 user data using:
 
 ## Packer — Custom Machine Images
 
-Custom AMIs (AWS) and GCP images are built using HashiCorp Packer. Templates are in the `packer/` directory.
+Custom AMIs are built using HashiCorp Packer. Templates are in the `packer/` directory.
 
 - **Source image:** Ubuntu 24.04 LTS
-- **Builders:** `amazon-ebs` (AWS) and `googlecompute` (GCP) in a single template
+- **Builder:** `amazon-ebs` (AWS)
 - **Provisioning:** `scripts/setup.sh` installs all dependencies, deploys the app, and configures systemd
-- **Image sharing:** AWS AMI shared with demo account; GCP image shared with demo project via IAM
+- **Image sharing:** AMI shared with the demo AWS account (`ami_users`)
 - **No local database in AMI:** The AMI does not include PostgreSQL — the app connects to RDS via credentials from EC2 user data
 
 ## CI/CD Workflows
 
 | Trigger | Workflow | Action |
 |---|---|---|
-| Pull request to `main` | `ci.yml` | Runs full integration test suite against a local PostgreSQL instance |
-| Pull request to `main` | `packer-validate.yml` | Validates Packer template formatting and syntax |
-| PR merged into `main` | `packer-build.yml` | Runs integration tests, then builds and shares AMI/GCP images |
+| Pull request touching `webapp/` | `webapp-ci.yml` | Runs full integration test suite against a local PostgreSQL instance |
+| Pull request touching `webapp/` | `webapp-packer-validate.yml` | Validates Packer template formatting and syntax |
+| Manual (`workflow_dispatch`) | `webapp-packer-build.yml` | Runs integration tests, builds and shares the AMI, then rolls it out to the Auto Scaling group |
 
 ### CI Database
 Integration tests in GitHub Actions use a local PostgreSQL 16 service container. S3 calls and the StatsD metrics client are mocked in the test suite using `unittest.mock.patch` — no real AWS credentials or CloudWatch Agent are needed in CI.

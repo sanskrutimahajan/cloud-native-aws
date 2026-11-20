@@ -11,9 +11,7 @@ Infrastructure as Code — Terraform configurations for AWS networking, compute,
 ## Repository Structure
 
 ```
-tf-infra/
-├── .github/workflows/
-│   └── terraform-ci.yml        # CI: fmt, init, validate on every PR
+infra/                          # CI lives at the repo root: .github/workflows/infra-terraform-ci.yml
 ├── aws/
 │   ├── providers.tf            # AWS + random provider configuration
 │   ├── main.tf                 # VPC, subnets, security groups, S3, RDS, IAM, launch template, ALB, ASG, Route 53
@@ -151,7 +149,7 @@ db_instance_class         = "db.t3.micro"
 route53_zone_id = "<DEV_HOSTED_ZONE_ID>"
 domain_name     = "dev.sansmah.me"
 
-lambda_zip_path  = "../serverless/function.zip"
+lambda_zip_path  = "../../serverless/function.zip"
 sendgrid_api_key = "<SENDGRID_API_KEY>"
 from_email       = "noreply@dev.sansmah.me"
 ```
@@ -184,7 +182,7 @@ After this one-time setup, Terraform manages all records within each subdomain's
 
 ---
 
-## AMI Requirements (built via Packer in the webapp repo)
+## AMI Requirements (built via Packer in `webapp/packer/`)
 
 The AMI must have:
 - Application installed at `/opt/csye6225/` with `csye6225` systemd service enabled

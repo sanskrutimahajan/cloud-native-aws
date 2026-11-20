@@ -56,7 +56,7 @@ aws lambda update-function-code \
   --zip-file fileb://lambda_package.zip
 ```
 
-Or on first deploy, create the function via the AWS Console or Terraform in your `tf-aws` infrastructure repo.
+Or on first deploy, create the function via the AWS Console or Terraform in the [`infra/`](../infra/) folder of this repo (`infra/aws/serverless.tf`).
 
 ### 4. Set environment variables on the Lambda function
 
