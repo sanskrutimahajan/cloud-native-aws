@@ -5,9 +5,13 @@ on:
     branches:
       - main
     paths:
-      - 'aws/**'
-      - 'gcp/**'
-      - '.github/workflows/terraform-ci.yml'
+      - 'infra/aws/**'
+      - 'infra/gcp/**'
+      - '.github/workflows/infra-terraform-ci.yml'
+
+defaults:
+  run:
+    working-directory: infra
 
 jobs:
   terraform-check:

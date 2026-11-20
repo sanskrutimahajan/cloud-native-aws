@@ -4,6 +4,13 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'webapp/**'
+      - '.github/workflows/webapp-packer-validate.yml'
+
+defaults:
+  run:
+    working-directory: webapp
 
 jobs:
   validate:
@@ -18,14 +25,14 @@ jobs:
         uses: hashicorp/setup-packer@main
 
       - name: Initialize Packer plugins
-        working-directory: packer
+        working-directory: webapp/packer
         run: packer init .
 
       - name: Create dummy artifact for validation
         run: touch packer/webapp.zip
 
       - name: Check Packer formatting
-        working-directory: packer
+        working-directory: webapp/packer
         run: |
           if ! packer fmt -check -diff .; then
             echo "::error::Packer template is not properly formatted. Run 'packer fmt .' to fix."
@@ -33,5 +40,5 @@ jobs:
           fi
 
       - name: Validate Packer template
-        working-directory: packer
+        working-directory: webapp/packer
         run: packer validate -var "app_zip_path=webapp.zip" .

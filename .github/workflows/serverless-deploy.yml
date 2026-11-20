@@ -1,9 +1,15 @@
 name: Deploy Lambda
 
+# Manual only: needs AWS credentials (secrets) that are not configured in this repo.
+# To re-enable automatic runs, restore the original trigger shown below.
+#   push: { branches: [main] }
+# (with paths: ['serverless/**', '.github/workflows/serverless-deploy.yml'])
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: serverless
 
 jobs:
   deploy:
